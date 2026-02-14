@@ -1,0 +1,108 @@
+:root { --bg: #131314; --card: #1e1f20; --text: #e3e3e3; --accent: #8ab4f8; --border: #444746; }
+        * { box-sizing: border-box; }
+        body { margin: 0; padding: 10px; font-family: sans-serif; background: var(--bg); color: var(--text); display: grid; grid-template-columns: 1fr 1.2fr 1fr; grid-template-rows: 90px 1fr; gap: 12px; height: 95vh; width: 100vw; overflow: hidden; }
+
+        /* パネル管理 */
+        .panel { display: flex; flex-direction: column; gap: 12px; height: 100%; min-height: 0; }
+        .widget { background: var(--card); border-radius: 20px; padding: 15px; border: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
+
+        /* ニュースリストのデザイン */
+        /* 1. スクロールバー（表記）をグレーにする設定 */
+        #chat-history::-webkit-scrollbar {
+            width: 6px;
+        }
+        #chat-history::-webkit-scrollbar-thumb {
+            background: #666; /* つまみをグレーに */
+            border-radius: 10px;
+        }
+        #chat-history::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        /* 2. ニュースのデザインとホバー時のグレー設定 */
+        .news-link, .news-link:visited {
+            color: #bbb !important; /* デフォルトの文字色を少し落ち着いたグレーに */
+            text-decoration: none;
+            font-size: 14px;
+            display: block;
+            padding: 8px 10px;
+            transition: all 0.2s;
+            border-radius: 8px;
+        }
+        /* ウィジェット内の iframe が枠いっぱいに広がるようにする */
+        .widget iframe {
+            border: none;
+            border-radius: 18px;
+            /* カレンダー以外の iframe（地図など）は反転させない */
+        }
+
+        #weather-map {
+            filter: none; /* カレンダーに適用されている invert フィルタを解除 */
+        }
+        .news-link:hover {
+            background: rgba(255, 255, 255, 0.1) !important; /* ホバー背景を薄いグレーに */
+            color: #fff !important; /* 文字を白く浮かび上がらせる */
+        }
+
+        /* 3. スクロールボタン（▲▼）を控えめな色に変更 */
+        .scroll-controls button {
+            /* ... 既存の設定 ... */
+            color: #888; /* 青（accent）ではなく、落ち着いたグレーに変更 */
+        }
+
+        /* トップバー */
+        .top-bar { grid-column: 1 / 4; display: flex; align-items: center; justify-content: space-between; background: var(--card); border-radius: 24px; border: 1px solid var(--border); padding: 0 25px; }
+        .brand { display: flex; align-items: center; gap: 12px; }
+        .brand-logo { width: 32px; height: 32px; filter: drop-shadow(0 0 5px var(--accent)); }
+        #clock { font-size: 34px; font-weight: 200; margin-right: 15px; }
+
+        /* チャットデザイン */
+        #chat-history { flex: 1; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 12px; white-space: pre-wrap; -webkit-overflow-scrolling: touch; }
+        /* チャットデザインの修正案 */
+        .message { max-width: 85%; padding: 12px 16px; border-radius: 18px; font-size: 14px; line-height: 1.5; opacity: 0; transform: translateY(10px); transition: 0.3s ease-out; position: relative; overflow-wrap: anywhere; word-break: break-word;}
+        .message.show { opacity: 1; transform: translateY(0); }
+        .gemini { background: #1a1a1b; border: 1px solid var(--border); align-self: flex-start; margin-left: 35px; }
+        .user { background: #2b2a2a; align-self: flex-end; }
+
+        /* コードブロック・コピーボタン */
+        pre { position: relative; background: #000 !important; padding: 15px; border-radius: 10px; border: 1px solid var(--border); margin: 10px 0; overflow-x: auto; }
+        code { color: #fff; font-family: monospace; }
+        .copy-btn { position: absolute; top: 8px; right: 8px; background: #333; border: 1px solid var(--border); color: #fff; border-radius: 5px; cursor: pointer; font-size: 11px; padding: 4px 8px; opacity: 0.8; }
+        .copy-btn:hover { opacity: 1; background: var(--accent); color: var(--bg); }
+
+        /* AIアバター */
+        .ai-avatar { position: absolute; left: -35px; top: 0; width: 28px; height: 28px; border-radius: 50%; background: #1a1a1b; border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 11px; color: var(--accent); }
+        .speaking-icon { animation: ai-breathe 1.5s infinite ease-in-out; border-color: var(--accent); }
+        @keyframes ai-breathe { 0% { box-shadow: 0 0 3px var(--accent); } 50% { box-shadow: 0 0 12px var(--accent); } 100% { box-shadow: 0 0 3px var(--accent); } }
+
+        /* 入力エリア */
+        .input-wrapper { background: #28292a; padding: 12px; display: flex; align-items: center; border-radius: 18px; gap: 10px; }
+        #geminiInput { flex: 1; background: transparent; border: none; color: white; outline: none; }
+        #micBtn { background: none; border: none; color: var(--text); cursor: pointer; }
+        .recording #micBtn { color: var(--accent); filter: drop-shadow(0 0 8px var(--accent)); }
+
+        /* モデルセレクター */
+        .model-selector { display: flex; background: #131314; border: 1px solid var(--border); border-radius: 12px; padding: 3px; }
+        .model-selector input { display: none; }
+        .model-selector label { padding: 6px 12px; border-radius: 9px; cursor: pointer; font-size: 11px; font-weight: bold; color: #888; transition: 0.2s; }
+        .model-selector input:checked + label { background: #1e1f20; color: var(--accent); }
+
+        /* スクロールボタン（チャットパネル内） */
+        .scroll-controls { position: absolute; right: 20px; bottom: 85px; display: flex; flex-direction: column; gap: 8px; z-index: 100; }
+        .scroll-controls button { width: 42px; height: 42px; border-radius: 50%; background: var(--card); border: 1px solid var(--border); color: var(--accent); cursor: pointer; font-size: 18px; box-shadow: 0 4px 10px rgba(0,0,0,0.4); transition: 0.2s; }
+        .scroll-controls button:active { transform: scale(0.9); background: var(--border); }
+
+        iframe { width: 100%; height: 100%; border: none; border-radius: 18px; filter: invert(90%) hue-rotate(180deg); }
+
+        /* モバイル対応 */
+        @media (max-width: 768px) {
+            body { display: flex !important; flex-direction: column !important; height: 100dvh !important; padding: 0 !important; }
+            .panel { display: none !important; flex: 1 !important; }
+            .panel.active-panel { display: flex !important; }
+            .top-bar { flex: 0 0 65px !important; border-radius: 0 !important; padding: 0 10px !important; }
+            .bottom-nav { display: flex !important; height: 70px !important; background: var(--card); border-top: 1px solid var(--border); justify-content: space-around; align-items: center; padding-bottom: env(safe-area-inset-bottom); }
+            .nav-item { background: none; border: none; color: #888; flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; cursor: pointer; }
+            .nav-item.active { color: var(--accent); }
+            .scroll-controls { display: none !important; }
+        }
+        @media (min-width: 769px) { .bottom-nav { display: none !important; } }

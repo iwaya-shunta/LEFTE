@@ -1,0 +1,8 @@
+Starting lefte_server... 
+ * Serving Flask app 'lefte_server'
+ * Debug mode: off
+WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+Press CTRL+C to quit
+127.0.0.1 - - [23/Jan/2026 00:27:21] "GET /calendar HTTP/1.1" 200 -
+127.0.0.1 - - [23/Jan/2026 00:28:43] "GET /calendar HTTP/1.1" 200 -

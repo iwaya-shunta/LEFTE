@@ -1,0 +1,24 @@
+# セキュリティ関連
+.env
+*.pem
+*.key
+certs/
+
+# Python関連
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+
+# L.E.F.T.E. 固有のデータ
+wav_files/
+static/uploads/
+*.db
+*.log
+
+# OS関連
+.DS_Store
+Thumbs.db
+
+token.json
+credentials.json

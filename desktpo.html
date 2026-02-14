@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="stylesheet" href="/desktpo.css">
+    <script src="/desktpo.js" defer></script>
+    <link rel="apple-touch-icon" href="/icon-192.png">
+    <meta name="theme-color" content="#131314">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>L.E.F.T.E. v5.5.1 Master</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script>
+        // 自身のドメインに接続
+        const socket = io();
+
+        socket.on('connect', () => {
+            console.log('🚀 Connected to LEFTE Core via WSS');
+        });
+
+        // サーバーからデータ（例：温度）が届いた時の処理
+        socket.on('sensor_update', (data) => {
+            console.log('🌡️ New data:', data);
+            // ここでDOMを書き換えて画面を更新する
+        });
+    </script>
+</head>
+<body>
+
+<div class="top-bar">
+    <div class="brand">
+        <svg class="brand-logo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8z"/><circle cx="12" cy="12" r="3"/><path d="M12 7v2m0 6v2m-5-5h2m6 0h2"/>
+        </svg>
+        <div style="font-size:16px; font-weight:bold;">L.E.F.T.E. <span style="font-size:9px; color:var(--accent);">v5.5.1</span></div>
+    </div>
+
+    <div style="display:flex; align-items:center; gap: 20px;">
+        
+        <div style="display:flex; align-items:center; opacity: 0.9;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:6px; opacity:0.7;">
+                <circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>
+            </svg>
+            <span id="clock">00:00</span>
+        </div>
+
+        <div style="display:flex; align-items:center; opacity: 0.9;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:6px; opacity:0.7;">
+                <path d="M17.5 19a3.5 3.5 0 1 1-5.95-2.47A3.5 3.5 0 1 1 5.5 13c0-2.2 1.8-4 4-4a4 4 0 0 1 7.5 2"/>
+            </svg>
+            <span id="weather"> --°C</span>
+        </div>
+
+        <div style="display:flex; align-items:center; opacity: 0.9;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:6px; opacity:0.7;">
+                <rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 9h6v6H9zM9 1v3m6-3v3M9 20v3m6-3v3M20 9h3m-3 6h3M1 9h3m-3 6h3"/>
+            </svg>
+            <span id="cpu-temp"> --°C</span>
+        </div>
+
+        <button onclick="location.reload()" style="background:#28292a; border:1px solid var(--border); color:white; border-radius:50%; width:30px; height:30px; cursor:pointer; display:flex; align-items:center; justify-content:center; transition: 0.2s;" onmouseover="this.style.background='#3a3b3c'" onmouseout="this.style.background='#28292a'">
+            <span style="font-size: 18px; margin-top: -2px;">⟳</span>
+        </button>
+    </div>
+
+    <div class="model-selector">
+    <input type="radio" id="m-flash" name="modelSelect" value="gemini-3-flash-preview" checked>
+    <label for="m-flash">⚡ Flash</label>
+    
+    <input type="radio" id="m-pro" name="modelSelect" value="gemini-3-pro-preview">
+    <label for="m-pro">🧠 Pro</label>
+</div>
+</div>
+
+<div id="news-panel" class="panel" style="grid-column: 1;">
+    <div class="widget" style="flex: 1; min-height: 0;">
+        <h3 style="margin:0 0 10px 0; font-weight:300; font-size:16px;">News</h3>
+        <div id="news-container"></div>
+    </div>
+
+    <div class="widget" style="height: 300px; padding: 0; overflow: hidden; position: relative;">
+        <h3 style="position: absolute; top: 10px; left: 15px; margin: 0; font-weight: 300; font-size: 14px; z-index: 10; background: rgba(30, 31, 32, 0.7); padding: 2px 8px; border-radius: 5px;">Weather Map</h3>
+        <iframe
+            id="weather-map"
+            width="100%"
+            height="100%"
+            src="https://embed.windy.com/embed2.html?lat=34.397&lon=132.475&detailLat=34.397&detailLon=132.475&width=400&height=300&zoom=8&level=surface&overlay=radar&product=radar&menu=&message=&marker=&calendar=now&pressure=&type=map&location=coordinates&detail=&metricWind=default&metricTemp=default&radarRange=-1"
+            frameborder="0"
+            style="filter: brightness(0.8) contrast(1.2);"> </iframe>
+    </div>
+</div>
+
+<div id="chat-panel" class="panel" style="grid-column: 2; position: relative;">
+    <div class="scroll-controls">
+        <button onmousedown="startScroll(-15)" onmouseup="stopScroll()" onmouseleave="stopScroll()" ontouchstart="startScroll(-15)" ontouchend="stopScroll()">▲</button>
+        <button onmousedown="startScroll(15)" onmouseup="stopScroll()" onmouseleave="stopScroll()" ontouchstart="startScroll(15)" ontouchend="stopScroll()">▼</button>
+    </div>
+    <div class="widget" style="flex: 1; padding: 0;">
+        <div id="chat-history"></div>
+        <div id="preview-container" style="padding:10px; border-top:1px solid var(--border); display:none;"></div>
+        <div style="padding:12px;">
+            <div class="input-wrapper">
+                <button id="fileBtn" style="background:none; border:none; color:var(--text); font-size:20px;">＋</button>
+                <input type="text" id="geminiInput" placeholder="ボクに話しかけてね...">
+                <button id="micBtn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg></button>
+                <button id="sendBtn" style="background:none; border:none; color:var(--accent); font-size:20px;">➤</button>
+            </div>
+        </div>
+    </div>
+    <input type="file" id="fileInput" style="display:none;">
+</div>
+
+<div id="calendar-panel" class="panel" style="grid-column: 3;">
+    <div class="widget" style="flex: 1; padding: 0;">
+        <iframe src="https://calendar.google.com/calendar/embed?src=iwayashuntaman%40gmail.com&ctz=Asia%2FTokyo" style="border: 0" width="100%" height="100%"></iframe>
+    </div>
+</div>
+
+<div class="bottom-nav">
+    <button class="nav-item" onclick="switchTab('news', event)"><span>📰</span><small>ニュース</small></button>
+    <button class="nav-item active" onclick="switchTab('chat', event)"><span>💬</span><small>チャット</small></button>
+    <button class="nav-item" onclick="switchTab('calendar', event)"><span>📅</span><small>予定</small></button>
+</div>
+</body>
+</html>
