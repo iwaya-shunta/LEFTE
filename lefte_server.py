@@ -1,7 +1,7 @@
 import os, re, requests, time
 import threading
 from datetime import datetime
-from flask import Flask, jsonify, request, send_from_directory
+from flask import Flask, jsonify, request, send_from_directory, send_file
 from flask_cors import CORS
 from dotenv import load_dotenv
 from werkzeug.utils import secure_filename
@@ -15,6 +15,7 @@ import gmail_actions
 import app_actions
 import notes_actions
 import photo_actions
+import hdd_actions
 
 from google import genai
 from google.genai import types
@@ -24,18 +25,23 @@ app = Flask(__name__, static_url_path='', static_folder='static')
 CORS(app)
 
 VOICEVOX_URL = os.getenv("VOICEVOX_URL", "http://127.0.0.1:50021")
-VOICE_DIR = 'wav_files'
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-UPLOAD_FOLDER = os.path.join(BASE_DIR, 'static', 'uploads')
+# --- パス設定 (順番と構成を整理) ---
+HDD_BASE = '/mnt/hdd1/lefte_media'
+VOICE_DIR = os.path.join(HDD_BASE, 'voices')
+UPLOAD_FOLDER = os.path.join(HDD_BASE, 'uploads')
 
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# 🚀 HDD内にフォルダがあるかチェックして作成
+# os.path.join(BASE_DIR, ...) を外して、直接 HDD を見に行きます
+if not os.path.exists(VOICE_DIR):
+    os.makedirs(VOICE_DIR, exist_ok=True)
+if not os.path.exists(UPLOAD_FOLDER):
+    os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
-# フォルダがない場合は作成
-if not os.path.exists(os.path.join(BASE_DIR, VOICE_DIR)):
-    os.makedirs(os.path.join(BASE_DIR, VOICE_DIR))
-if not os.path.exists(UPLOAD_FOLDER):
-    os.makedirs(UPLOAD_FOLDER)
+client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
 FUNCTIONAL_RULES = """
 1. カレンダー/ドライブ等は当然の日常として使い、説明は不要。
@@ -53,7 +59,9 @@ tools = [
     gmail_actions.list_recent_emails, search_actions.search_web,
     app_actions.register_app, app_actions.launch_app,
     notes_actions.save_note, notes_actions.read_note,
-    photo_actions.list_photos
+    photo_actions.list_photos,
+    hdd_actions.list_hdd_contents,
+    hdd_actions.read_hdd_text_file
 ]
 
 chat_storage.init_db()
@@ -89,29 +97,42 @@ def generate_voice(text, speaker_id=8, filename="response.wav"):
 
 @app.route('/wav_files/<filename>')
 def serve_wav(filename):
-    """音声ファイルを配信するルート（404対策）"""
-    return send_from_directory(os.path.join(BASE_DIR, VOICE_DIR), filename)
+    """HDDから音声ファイルを配信"""
+    return send_from_directory(VOICE_DIR, filename)
 
+@app.route('/uploads/<filename>')
+def serve_upload(filename):
+    return send_from_directory('/mnt/hdd1/lefte_media/uploads', filename)
 
 @socketio.on('chat_request')
 def handle_chat(data):
-    """WebSocket 経由でチャットリクエストを受け取り、全員に同期送信する"""
+    """
+    リクエストを受け取ったら、即座に『考え中』の状態を全員に送り、
+    Geminiの重い処理はバックグラウンド（裏側）で実行します。
+    """
+    # 📣 まず「考え中...」という信号を送り、UI側のレスポンスを爆速にする（演出用）
+    emit('ai_thinking', {'status': 'processing'}, broadcast=True)
+
+    # 🚀 重い処理をバックグラウンドタスクとして開始
+    socketio.start_background_task(process_chat_task, data)
+
+def process_chat_task(data):
+    """
+    Gemini呼び出し、DB保存、音声生成、一斉送信をここで行う（一本道を塞がない）
+    """
     user_input = data.get('message', '')
-    # フロントから送られたモデル名を使用（デフォルトは gemini-3-flash-preview）
     model_name = data.get('model', 'gemini-3-flash-preview')
 
-    # 1. ユーザーの発言を保存
-    chat_storage.save_message('user', user_input)
-
     try:
-        # 文脈作成 (DBから今日の履歴を取得)
+        # 1. ユーザーの発言を保存
+        chat_storage.save_message('user', user_input)
+
+        # --- Gemini 呼び出し (ここは時間がかかる) ---
         past_rows = chat_storage.get_today_history()
-        contents = [{"role": ("user" if r[1] == "user" else "model"), "parts": [{"text": r[2]}]} for r in
-                    past_rows[-10:]]
+        contents = [{"role": ("user" if r[1] == "user" else "model"), "parts": [{"text": r[2]}]} for r in past_rows[-10:]]
         now_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         contents.append({"role": "user", "parts": [{"text": f"【現在時刻: {now_str}】\n{user_input}"}]})
 
-        # Gemini 呼び出し
         response = client.models.generate_content(
             model=model_name,
             contents=contents,
@@ -123,9 +144,9 @@ def handle_chat(data):
         )
 
         full_text = response.text or "完了だよ。"
+        
+        # 信号の抜き出しロジック（既存のものをそのままここに移動）
         launch_url = None
-
-        # 🚀 信号の抜き出し
         for part in response.candidates[0].content.parts:
             if hasattr(part, 'text') and part.text and "🚀LAUNCH_SIGNAL:" in part.text:
                 launch_url = part.text.split("🚀LAUNCH_SIGNAL:")[1].strip()
@@ -139,28 +160,26 @@ def handle_chat(data):
 
         # 2. AIの返答を保存
         chat_storage.save_message('assistant', full_text)
-        print(f"DEBUG: [WS] AIの返答をDBに書き込みました: {full_text[:15]}...")
 
-        # 3. 音声生成
+        # 3. 音声生成 (ここも時間がかかる)
         voice_filename = f"v_{int(time.time())}.wav"
-        save_path = os.path.join(BASE_DIR, VOICE_DIR, voice_filename)
+        save_path = os.path.join(VOICE_DIR, voice_filename)
         generate_voice(full_text, filename=save_path)
 
-        # 🚀 4. 全デバイスへ同期データをブロードキャスト
+        # 4. 全デバイスへ同期データを一斉送信
         sync_data = {
             "user_message": user_input,
             "response": full_text,
             "voice_url": f"/wav_files/{voice_filename}",
-            "launch_url": launch_url,
-            "timestamp": time.time()
+            "launch_url": launch_url
         }
-
-        # 📣 繋がっているすべてのクライアント（PC/スマホ）に一斉送信
-        emit('chat_update', sync_data, broadcast=True)
+        
+        # バックグラウンドタスク内では socketio.emit を直接使う
+        socketio.emit('chat_update', sync_data)
 
     except Exception as e:
-        print(f"Chat error: {e}")
-        emit('error_message', {"response": f"エラー：{str(e)}"})
+        print(f"Async Chat error: {e}")
+        socketio.emit('error_message', {"response": f"エラー：{str(e)}"})
 
 @app.route('/')
 def index():
@@ -228,7 +247,43 @@ def background_monitor():
             print(f"Monitor error: {e}")
         
         # ⚠️ time.sleep ではなく socketio.sleep を使うのが eventlet の作法
-        socketio.sleep(5) 
+        socketio.sleep(5)
+
+@app.route('/download/<path:filepath>')
+def download_file(filepath):
+    # セキュリティのため、必ず HDD のディレクトリ内に限定する
+    target = os.path.normpath(os.path.join(HDD_BASE, filepath))
+    if not target.startswith(HDD_BASE):
+        return "Access Denied", 403
+    
+    return send_file(target, as_attachment=True)
+
+# lefte_server.py に追記
+@app.route('/upload_to_hdd', methods=['POST'])
+def upload_to_hdd():
+    if 'file' not in request.files:
+        return jsonify({"success": False, "error": "No file"}), 400
+    
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({"success": False, "error": "No filename"}), 400
+
+    filename = secure_filename(file.filename)
+    # HDD内の uploads フォルダに保存
+    save_path = os.path.join(UPLOAD_FOLDER, filename)
+    file.save(save_path)
+    
+    return jsonify({
+        "success": True, 
+        "path": f"lefte_media/uploads/{filename}",
+        "full_path": save_path
+    })
+
+# ダウンロード用（将来的にリンクをクリックした時に発動）
+@app.route('/download/<path:filename>')
+def download_from_hdd(filename):
+    # 安全のため /mnt/hdd1/lefte_media 以下に限定
+    return send_from_directory(HDD_BASE, filename, as_attachment=True)
 
 if __name__ == '__main__':
     # 🚀 ここは一つだけでOK！

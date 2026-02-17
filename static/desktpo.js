@@ -96,13 +96,28 @@ function addMessageToUI(role, text) {
     const displayRole = role === 'assistant' ? 'gemini' : 'user';
     bubble.className = `message ${displayRole} show`;
 
+    // 🕒 現在時刻を取得 (例: 23:55)
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+
     if (displayRole === 'gemini') {
         const content = marked.parse(text);
-        bubble.innerHTML = `<div class="ai-avatar">L</div><div class="res-txt">${content}</div>`;
+        bubble.innerHTML = `
+            <div class="ai-avatar">L</div>
+            <div class="message-content">
+                <div class="res-txt">${content}</div>
+                <span class="message-time">${timeStr}</span>
+            </div>
+        `;
         addCopyButtons(bubble);
     } else {
-        bubble.innerText = text;
+        // ユーザー側の表示
+        bubble.innerHTML = `
+            <div class="message-text">${text}</div>
+            <span class="message-time">${timeStr}</span>
+        `;
     }
+
     hist.appendChild(bubble);
     hist.scrollTop = hist.scrollHeight;
     return bubble;
@@ -150,33 +165,78 @@ async function runTypewriter(el, fullTxt, url) {
     });
 }
 
+async function uploadToHDD(file) {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    // アップロード中をロゴで演出
+    const logo = document.querySelector('.brand-logo');
+    if (logo) logo.classList.add('is-thinking');
+
+    try {
+        const res = await fetch('/upload_to_hdd', {
+            method: 'POST',
+            body: formData
+        });
+        const data = await res.json();
+        if (data.success) {
+            // 保存場所をしゅんたさんに報告
+            addMessageToUI('assistant', `ファイルを HDD の \`${data.path}\` に保存したよ！いつでも読み取れるからね。`);
+        } else {
+            console.error("Upload failed:", data.error);
+        }
+    } catch (err) {
+        console.error("Upload error:", err);
+    } finally {
+        if (logo) logo.classList.remove('is-thinking');
+    }
+}
+
+// --- 修正：ファイル選択時の挙動 ---
+document.getElementById('fileInput').onchange = (e) => {
+    const f = e.target.files[0];
+    if (!f) return;
+
+    // 1. まずは HDD にアップロードを実行
+    uploadToHDD(f);
+
+    // 2. 画像ならチャットのプレビュー（Geminiへの送信準備）を行う
+    if (f.type.startsWith('image/')) {
+        const r = new FileReader();
+        r.onload = (e) => {
+            selectedFileBase64 = e.target.result.split(',')[1];
+            selectedMimeType = f.type;
+            document.getElementById('preview-container').innerHTML = `<img src="${e.target.result}" style="max-height:80px; border-radius:10px;">`;
+            document.getElementById('preview-container').style.display = 'block';
+        };
+        r.readAsDataURL(f);
+    }
+};
+
 // --- メッセージ送信 (WebSocket版) ---
 function ask() {
     const input = document.getElementById('geminiInput');
     const text = input.value.trim();
     const model = document.querySelector('input[name="modelSelect"]:checked').value;
     
-    // 画像データがある場合の処理
-    const f64 = selectedFileBase64; 
-    const mime = selectedMimeType;
+    if (!text && !selectedFileBase64) return;
 
-    if (!text && !f64) return;
+    // 自分の発言だけ即座に出す
+    addMessageToUI('user', text);
+    input.value = '';
 
-    // 🚀 HTTPのfetchを削除し、WebSocketでイベントを送信
+    // 🚀 サーバーに依頼を投げるだけにする
     socket.emit('chat_request', {
         message: text,
-        image: f64,
-        mime_type: mime,
-        model: model
+        model: model,
+        image: selectedFileBase64,
+        mime_type: selectedMimeType
     });
 
-    // 送信したらすぐに入力欄とプレビューをクリア
-    input.value = '';
     selectedFileBase64 = null;
     document.getElementById('preview-container').style.display = 'none';
-
-    // 演出：自分の画面にはすぐに「送信中...」のような状態を出しておくと胃に優しい
-    //（ただし同期で戻ってくるので、ここでは追加せず、受信を待つのが一番確実です）
+    
+    // 💡 ここで 'assistant' バブルを作っていた 1 行を削除！
 }
 
 // --- スクロール・音声・ファイル・スワイプ等の各種イベント ---
@@ -238,26 +298,49 @@ socket.on('sys_status', (data) => {
     }
 });
 
-// WebSocketの受信イベント (全デバイス共通)
-socket.on('chat_update', async (data) => {
-    console.log('🔄 デバイス間で同期中...', data);
+// 🚀 STEP 3: ロード中の演出（非同期処理中）
+socket.on('ai_thinking', (data) => {
+    const logo = document.querySelector('.brand-logo');
+    if (logo) logo.classList.add('is-thinking');
 
-    // 1. ユーザーのメッセージを表示
-    if (data.user_message) {
+    if (!document.getElementById('thinking-bubble')) {
+        // 💬 思考中のバリエーション
+        const phrases = ["うーん……", "えーっと……", "確認中だよ……", "ちょっと待ってね……"];
+        const randomPhrase = phrases[Math.floor(Math.random() * phrases.length)];
+
+        const bubble = addMessageToUI('assistant', randomPhrase);
+        bubble.id = 'thinking-bubble';
+    }
+});
+
+// 🚀 STEP 4: 応答の表示
+// 🚀 STEP 4: 応答の表示（完全版）
+socket.on('chat_update', async (data) => {
+    // 1. 名札（ID）を頼りにドット（思考中バブル）を消す
+    const tempBubble = document.getElementById('thinking-bubble');
+    if (tempBubble) tempBubble.remove();
+
+    // 2. ロゴの光る演出を止める（もしCSSクラスを作っている場合）
+    const logo = document.querySelector('.brand-logo');
+    if (logo) logo.classList.remove('is-thinking');
+
+    // 3. 【同期】スマホなど他デバイスからの送信を画面に反映
+    // 自分の画面にまだ自分のメッセージが出ていなければ追加する
+    const lastUserMsg = chatHistory.querySelector('.message.user:last-child');
+    if (!lastUserMsg || lastUserMsg.innerText !== data.user_message) {
         addMessageToUI('user', data.user_message);
     }
 
-    // 2. AIの返答を表示 (タイピングエフェクト付き)
-    const bubble = addMessageToUI('assistant', '...'); // まずは空のバブル
+    // 4. 本物のメッセージバブルを作成して表示
+    const bubble = addMessageToUI('assistant', '');
     const resTxtElement = bubble.querySelector('.res-txt');
     
-    if (data.response) {
-        // タイピングエフェクトと音声再生を実行
-        await runTypewriter(resTxtElement, data.response, data.voice_url);
-    }
+    // 5. タイピング演出 ＋ 音声再生
+    await runTypewriter(resTxtElement, data.response, data.voice_url);
 
-    // 3. アプリ起動信号があれば実行
+    // 6. 🚀 アプリ起動信号があれば実行
     if (data.launch_url) {
+        console.log("🚀 Launching app:", data.launch_url);
         window.location.href = data.launch_url;
     }
 });
