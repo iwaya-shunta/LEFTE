@@ -1,5 +1,7 @@
 import os, re, requests, time
 import threading
+import logging
+from logging.handlers import RotatingFileHandler
 from datetime import datetime
 from flask import Flask, jsonify, request, send_from_directory, send_file
 from flask_cors import CORS
@@ -67,6 +69,32 @@ tools = [
 chat_storage.init_db()
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
 
+# --- 🚀 ログ設定 ---
+LOG_FILE = os.path.join(HDD_BASE, 'lefte_system.log') # HDDに保存
+
+# ログのフォーマット定義 (時刻 - レベル - メッセージ)
+log_format = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+
+# 1. ファイルへの出力設定 (10MBごとにローテーション、最大5ファイル保持)
+file_handler = RotatingFileHandler(LOG_FILE, maxBytes=10*1024*1024, backupCount=5, encoding='utf-8')
+file_handler.setFormatter(log_format)
+
+# 2. コンソール（ターミナル）への出力設定
+stream_handler = logging.StreamHandler()
+stream_handler.setFormatter(log_format)
+
+# 3. ルートロガーの設定
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+logger.addHandler(file_handler)
+logger.addHandler(stream_handler)
+
+# Flask や SocketIO の内部ログも統合する場合
+app.logger.addHandler(file_handler)
+logging.getLogger('werkzeug').addHandler(file_handler)
+
+logging.info("🚀 L.E.F.T.E. Logging System Started.")
+logging.info(f"💾 Log file: {LOG_FILE}")
 
 def get_system_instruction():
     """personality.txt から性格設定を読み込む"""
@@ -117,21 +145,29 @@ def handle_chat(data):
     socketio.start_background_task(process_chat_task, data)
 
 def process_chat_task(data):
-    """
-    Gemini呼び出し、DB保存、音声生成、一斉送信をここで行う（一本道を塞がない）
-    """
     user_input = data.get('message', '')
+    image_b64 = data.get('image')      # 🚀 画像データを取得
+    image_url = data.get('image_url')
+    mime_type = data.get('mime_type')  # 🚀 MIMEタイプを取得
     model_name = data.get('model', 'gemini-3-flash-preview')
 
     try:
-        # 1. ユーザーの発言を保存
-        chat_storage.save_message('user', user_input)
+        chat_storage.save_message('user', user_input, image_url)
 
-        # --- Gemini 呼び出し (ここは時間がかかる) ---
         past_rows = chat_storage.get_today_history()
         contents = [{"role": ("user" if r[1] == "user" else "model"), "parts": [{"text": r[2]}]} for r in past_rows[-10:]]
         now_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        contents.append({"role": "user", "parts": [{"text": f"【現在時刻: {now_str}】\n{user_input}"}]})
+
+        # 🚀 重要：テキストと画像をパーツとしてまとめる
+        user_parts = [{"text": f"【現在時刻: {now_str}】\n{user_input}"}]
+        if image_b64 and mime_type:
+            user_parts.append({
+                "inline_data": {
+                    "data": image_b64,
+                    "mime_type": mime_type
+                }
+            })
+        contents.append({"role": "user", "parts": user_parts})
 
         response = client.models.generate_content(
             model=model_name,
@@ -142,18 +178,22 @@ def process_chat_task(data):
                 automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=False)
             )
         )
+        # ... (あとの処理は今のままでOK)
+        # ...（以下、full_text の取得や保存、音声生成は今のままでOK）
+        # ...（以下は今のままでOK）
 
         full_text = response.text or "完了だよ。"
         
-        # 信号の抜き出しロジック（既存のものをそのままここに移動）
+        # 信号の抜き出しロジック
         launch_url = None
-        for part in response.candidates[0].content.parts:
-            if hasattr(part, 'text') and part.text and "🚀LAUNCH_SIGNAL:" in part.text:
-                launch_url = part.text.split("🚀LAUNCH_SIGNAL:")[1].strip()
-            elif hasattr(part, 'function_response') and part.function_response:
-                res_val = part.function_response.response.get('result', '')
-                if isinstance(res_val, str) and "🚀LAUNCH_SIGNAL:" in res_val:
-                    launch_url = res_val.split("🚀LAUNCH_SIGNAL:")[1].strip()
+        if response.candidates and response.candidates[0].content.parts:
+            for part in response.candidates[0].content.parts:
+                if hasattr(part, 'text') and part.text and "🚀LAUNCH_SIGNAL:" in part.text:
+                    launch_url = part.text.split("🚀LAUNCH_SIGNAL:")[1].strip()
+                elif hasattr(part, 'function_response') and part.function_response:
+                    res_val = part.function_response.response.get('result', '')
+                    if isinstance(res_val, str) and "🚀LAUNCH_SIGNAL:" in res_val:
+                        launch_url = res_val.split("🚀LAUNCH_SIGNAL:")[1].strip()
 
         if launch_url and "🚀LAUNCH_SIGNAL:" in full_text:
             full_text = full_text.split("🚀LAUNCH_SIGNAL:")[0].strip()
@@ -161,20 +201,21 @@ def process_chat_task(data):
         # 2. AIの返答を保存
         chat_storage.save_message('assistant', full_text)
 
-        # 3. 音声生成 (ここも時間がかかる)
+        # 3. 音声生成
         voice_filename = f"v_{int(time.time())}.wav"
         save_path = os.path.join(VOICE_DIR, voice_filename)
         generate_voice(full_text, filename=save_path)
 
         # 4. 全デバイスへ同期データを一斉送信
+        # lefte_server.py の 184行目付近
+        # 4. 全デバイスへ同期データを一斉送信
         sync_data = {
             "user_message": user_input,
             "response": full_text,
             "voice_url": f"/wav_files/{voice_filename}",
-            "launch_url": launch_url
+            "launch_url": launch_url,
+            "image_url": image_url
         }
-        
-        # バックグラウンドタスク内では socketio.emit を直接使う
         socketio.emit('chat_update', sync_data)
 
     except Exception as e:
@@ -188,12 +229,11 @@ def index():
 
 @app.route('/history', methods=['GET'])
 def history_api():
-    """過去の履歴を取得してフロントに返す"""
     try:
         rows = chat_storage.get_today_history()
-        return jsonify([{"role": r[1], "content": r[2]} for r in rows])
+        # 🚀 r[3] (image_url) を含める
+        return jsonify([{"role": r[1], "content": r[2], "image_url": r[3]} for r in rows])
     except Exception as e:
-        print(f"History error: {e}")
         return jsonify([])
 
 @app.route('/service-worker.js')
@@ -275,7 +315,7 @@ def upload_to_hdd():
     
     return jsonify({
         "success": True, 
-        "path": f"lefte_media/uploads/{filename}",
+        "path": f"uploads/{filename}", # 🚀 'lefte_media/' を取って、ルートからのパスにする
         "full_path": save_path
     })
 

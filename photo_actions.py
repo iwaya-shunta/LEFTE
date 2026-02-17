@@ -6,7 +6,7 @@ def list_photos():
     Returns:
         A list of URLs for the uploaded photos, or a message if no photos are found.
     """
-    upload_dir = os.path.join('static', 'uploads')
+    upload_dir = '/mnt/hdd1/lefte_media/uploads'
     if not os.path.exists(upload_dir):
         return "写真アップロード用のディレクトリがまだ作成されていません。"
 
