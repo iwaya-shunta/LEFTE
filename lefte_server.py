@@ -1,6 +1,4 @@
-import os, re, requests, time
-import threading
-import logging
+import os, re, requests, time, logging
 from logging.handlers import RotatingFileHandler
 from datetime import datetime
 from flask import Flask, jsonify, request, send_from_directory, send_file
@@ -8,52 +6,38 @@ from flask_cors import CORS
 from dotenv import load_dotenv
 from werkzeug.utils import secure_filename
 from flask_socketio import SocketIO, emit
-
-import chat_storage
-import calendar_actions
-import drive_actions
-import search_actions
-import gmail_actions
-import app_actions
-import notes_actions
-import photo_actions
-import hdd_actions
-
 from google import genai
 from google.genai import types
+
+# 自作アクションの読み込み
+import chat_storage, hdd_actions, calendar_actions, drive_actions, search_actions, gmail_actions, app_actions, notes_actions, photo_actions
 
 load_dotenv()
 app = Flask(__name__, static_url_path='', static_folder='static')
 CORS(app)
 
+# --- パス設定 ---
 VOICEVOX_URL = os.getenv("VOICEVOX_URL", "http://127.0.0.1:50021")
-# --- パス設定 (順番と構成を整理) ---
 HDD_BASE = '/mnt/hdd1/lefte_media'
 VOICE_DIR = os.path.join(HDD_BASE, 'voices')
 UPLOAD_FOLDER = os.path.join(HDD_BASE, 'uploads')
-
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# 🚀 HDD内にフォルダがあるかチェックして作成
-# os.path.join(BASE_DIR, ...) を外して、直接 HDD を見に行きます
-if not os.path.exists(VOICE_DIR):
-    os.makedirs(VOICE_DIR, exist_ok=True)
-if not os.path.exists(UPLOAD_FOLDER):
-    os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+for d in [VOICE_DIR, UPLOAD_FOLDER]: os.makedirs(d, exist_ok=True)
 
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+# --- ログ設定 ---
+LOG_FILE = os.path.join(HDD_BASE, 'lefte_system.log')
+log_format = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+file_handler = RotatingFileHandler(LOG_FILE, maxBytes=10*1024*1024, backupCount=5, encoding='utf-8')
+file_handler.setFormatter(log_format)
+logging.getLogger().addHandler(file_handler)
+logging.getLogger().setLevel(logging.INFO)
 
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+chat_storage.init_db()
 
-FUNCTIONAL_RULES = """
-1. カレンダー/ドライブ等は当然の日常として使い、説明は不要。
-2. 簡潔に回答せよ。
-3. アプリを起動する際は、ツールが返した '🚀LAUNCH_SIGNAL:...' を必ず含めること。
-4. ツール実行に失敗した場合は、技術的なエラーログを出すのではなく、ユーザーに「何ができなかったか」を1行で伝える。
-5. 音声合成（Voicevox）で読み上げるため、URLや複雑な記号、メタデータは本文に含めない。
-6. ユーザーを「しゅんた」と認識し、適度な距離感のアシスタントとして振る舞う。
-"""
-
+# --- ツール一覧 ---
 tools = [
     calendar_actions.list_calendar_events, calendar_actions.add_calendar_event,
     calendar_actions.delete_calendar_event, calendar_actions.update_calendar_event,
@@ -66,51 +50,7 @@ tools = [
     hdd_actions.read_hdd_text_file
 ]
 
-chat_storage.init_db()
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
-
-# --- 🚀 ログ設定 ---
-LOG_FILE = os.path.join(HDD_BASE, 'lefte_system.log') # HDDに保存
-
-# ログのフォーマット定義 (時刻 - レベル - メッセージ)
-log_format = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
-
-# 1. ファイルへの出力設定 (10MBごとにローテーション、最大5ファイル保持)
-file_handler = RotatingFileHandler(LOG_FILE, maxBytes=10*1024*1024, backupCount=5, encoding='utf-8')
-file_handler.setFormatter(log_format)
-
-# 2. コンソール（ターミナル）への出力設定
-stream_handler = logging.StreamHandler()
-stream_handler.setFormatter(log_format)
-
-# 3. ルートロガーの設定
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
-logger.addHandler(file_handler)
-logger.addHandler(stream_handler)
-
-# Flask や SocketIO の内部ログも統合する場合
-app.logger.addHandler(file_handler)
-logging.getLogger('werkzeug').addHandler(file_handler)
-
-logging.info("🚀 L.E.F.T.E. Logging System Started.")
-logging.info(f"💾 Log file: {LOG_FILE}")
-
-def get_system_instruction():
-    """personality.txt から性格設定を読み込む"""
-    # .env で指定がない場合は personality.txt を探す
-    personality_path = os.getenv("PERSONALITY_FILE", "personality.txt")
-    full_path = os.path.join(BASE_DIR, personality_path)
-
-    if os.path.exists(full_path):
-        with open(full_path, "r", encoding="utf-8") as f:
-            personality = f.read()
-    else:
-        # ファイルがない場合の予備
-        personality = "あなたは助手の L.E.F.T.E. です。"
-
-    return f"{personality}\n{FUNCTIONAL_RULES}"
-
+# --- 音声生成 (Voicevox) ---
 def generate_voice(text, speaker_id=8, filename="response.wav"):
     clean_text = re.sub(r'\(.*?\)|（.*?）', '', text)
     if not clean_text.strip(): clean_text = "了解だよ。"
@@ -121,219 +61,106 @@ def generate_voice(text, speaker_id=8, filename="response.wav"):
         res_syn = requests.post(f"{VOICEVOX_URL}/synthesis", params={'speaker': speaker_id}, json=data)
         with open(filename, "wb") as f: f.write(res_syn.content)
     except Exception as e:
-        print(f"Voice generation error: {e}")
+        logging.error(f"Voice generation error: {e}")
 
-@app.route('/wav_files/<filename>')
-def serve_wav(filename):
-    """HDDから音声ファイルを配信"""
-    return send_from_directory(VOICE_DIR, filename)
+# --- ルーティング ---
+@app.route('/')
+def index():
+    return send_file(os.path.join(BASE_DIR, 'desktpo.html'))
+
+@app.route('/history', methods=['GET'])
+def history_api():
+    rows = chat_storage.get_today_history()
+    return jsonify([{"role": r[1], "content": r[2], "image_url": r[3]} for r in rows])
 
 @app.route('/uploads/<filename>')
 def serve_upload(filename):
-    return send_from_directory('/mnt/hdd1/lefte_media/uploads', filename)
+    return send_from_directory(UPLOAD_FOLDER, filename)
 
+@app.route('/wav_files/<filename>')
+def serve_wav(filename):
+    return send_from_directory(VOICE_DIR, filename)
+
+@app.route('/upload_to_hdd', methods=['POST'])
+def upload_to_hdd():
+    file = request.files.get('file')
+    if not file: return jsonify({"success": False}), 400
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    filename = f"{timestamp}_{secure_filename(file.filename)}"
+    if filename.endswith('_'): filename += "image.jpg"
+    save_path = os.path.join(UPLOAD_FOLDER, filename)
+    file.save(save_path)
+    return jsonify({"success": True, "path": f"uploads/{filename}"})
+
+# --- WebSocket 処理 ---
 @socketio.on('chat_request')
 def handle_chat(data):
-    """
-    リクエストを受け取ったら、即座に『考え中』の状態を全員に送り、
-    Geminiの重い処理はバックグラウンド（裏側）で実行します。
-    """
-    # 📣 まず「考え中...」という信号を送り、UI側のレスポンスを爆速にする（演出用）
-    emit('ai_thinking', {'status': 'processing'}, broadcast=True)
-
-    # 🚀 重い処理をバックグラウンドタスクとして開始
+    emit('ai_thinking', broadcast=True)
     socketio.start_background_task(process_chat_task, data)
 
 def process_chat_task(data):
     user_input = data.get('message', '')
-    image_b64 = data.get('image')      # 🚀 画像データを取得
+    image_b64 = data.get('image')
     image_url = data.get('image_url')
-    mime_type = data.get('mime_type')  # 🚀 MIMEタイプを取得
-    model_name = data.get('model', 'gemini-3-flash-preview')
-
+    mime_type = data.get('mime_type')
+    
     try:
         chat_storage.save_message('user', user_input, image_url)
-
         past_rows = chat_storage.get_today_history()
-        contents = [{"role": ("user" if r[1] == "user" else "model"), "parts": [{"text": r[2]}]} for r in past_rows[-10:]]
-        now_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-
-        # 🚀 重要：テキストと画像をパーツとしてまとめる
-        user_parts = [{"text": f"【現在時刻: {now_str}】\n{user_input}"}]
+        contents = [{"role": ("user" if r[1] == "user" else "model"), "parts": [{"text": r[2]}]} for r in past_rows[-11:-1]]
+        
+        user_parts = [{"text": f"【現在時刻: {datetime.now().strftime('%H:%M:%S')}】\n{user_input}"}]
         if image_b64 and mime_type:
-            user_parts.append({
-                "inline_data": {
-                    "data": image_b64,
-                    "mime_type": mime_type
-                }
-            })
+            user_parts.append({"inline_data": {"data": image_b64, "mime_type": mime_type}})
         contents.append({"role": "user", "parts": user_parts})
 
         response = client.models.generate_content(
-            model=model_name,
+            model=data.get('model', 'gemini-3-flash-preview'),
             contents=contents,
             config=types.GenerateContentConfig(
-                system_instruction=get_system_instruction(),
+                system_instruction="あなたはL.E.F.T.E.です。", 
                 tools=tools, 
                 automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=False)
             )
         )
-        # ... (あとの処理は今のままでOK)
-        # ...（以下、full_text の取得や保存、音声生成は今のままでOK）
-        # ...（以下は今のままでOK）
-
         full_text = response.text or "完了だよ。"
-        
-        # 信号の抜き出しロジック
-        launch_url = None
-        if response.candidates and response.candidates[0].content.parts:
-            for part in response.candidates[0].content.parts:
-                if hasattr(part, 'text') and part.text and "🚀LAUNCH_SIGNAL:" in part.text:
-                    launch_url = part.text.split("🚀LAUNCH_SIGNAL:")[1].strip()
-                elif hasattr(part, 'function_response') and part.function_response:
-                    res_val = part.function_response.response.get('result', '')
-                    if isinstance(res_val, str) and "🚀LAUNCH_SIGNAL:" in res_val:
-                        launch_url = res_val.split("🚀LAUNCH_SIGNAL:")[1].strip()
-
-        if launch_url and "🚀LAUNCH_SIGNAL:" in full_text:
-            full_text = full_text.split("🚀LAUNCH_SIGNAL:")[0].strip()
-
-        # 2. AIの返答を保存
         chat_storage.save_message('assistant', full_text)
 
-        # 3. 音声生成
         voice_filename = f"v_{int(time.time())}.wav"
-        save_path = os.path.join(VOICE_DIR, voice_filename)
-        generate_voice(full_text, filename=save_path)
+        generate_voice(full_text, filename=os.path.join(VOICE_DIR, voice_filename))
 
-        # 4. 全デバイスへ同期データを一斉送信
-        # lefte_server.py の 184行目付近
-        # 4. 全デバイスへ同期データを一斉送信
-        sync_data = {
-            "user_message": user_input,
-            "response": full_text,
+        socketio.emit('chat_update', {
+            "user_message": user_input, 
+            "response": full_text, 
             "voice_url": f"/wav_files/{voice_filename}",
-            "launch_url": launch_url,
             "image_url": image_url
-        }
-        socketio.emit('chat_update', sync_data)
-
+        })
     except Exception as e:
-        print(f"Async Chat error: {e}")
-        socketio.emit('error_message', {"response": f"エラー：{str(e)}"})
-
-@app.route('/')
-def index():
-    with open(os.path.join(BASE_DIR, 'desktpo.html'), 'r', encoding='utf-8') as f:
-        return f.read().replace("YOUR_CALENDAR_ID_HERE", os.getenv("GOOGLE_CALENDAR_ID", "primary"))
-
-@app.route('/history', methods=['GET'])
-def history_api():
-    try:
-        rows = chat_storage.get_today_history()
-        # 🚀 r[3] (image_url) を含める
-        return jsonify([{"role": r[1], "content": r[2], "image_url": r[3]} for r in rows])
-    except Exception as e:
-        return jsonify([])
-
-@app.route('/service-worker.js')
-def serve_sw():
-    return send_from_directory('static', 'service-worker.js', mimetype='application/javascript')
-
-@app.route('/manifest.json')
-def serve_manifest():
-    # 🚀 BASE_DIR ではなく 'static' フォルダを指定します
-    return send_from_directory('static', 'manifest.json', mimetype='application/manifest+json')
-
-@app.route('/upload_photo', methods=['POST'])
-def upload_photo():
-    if 'photo' not in request.files:
-        return jsonify({"error": "No photo part in the request"}), 400
-    file = request.files['photo']
-    if file.filename == '':
-        return jsonify({"error": "No selected file"}), 400
-    if file:
-        filename = secure_filename(file.filename)
-        # タイムスタンプでユニークなファイル名を生成
-        timestamp = int(time.time())
-        unique_filename = f"{timestamp}_{filename}"
-        save_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
-        file.save(save_path)
-        
-        # アップロードされたファイルのURLを返す
-        file_url = f"/uploads/{unique_filename}"
-        
-        # ユーザーメッセージとしてアップロードを履歴に記録
-        chat_storage.save_message('user', f"画像をアップロードしました: {unique_filename}")
-
-        return jsonify({"success": True, "file_url": file_url})
-    return jsonify({"error": "File upload failed"}), 500
-
-@socketio.on('connect')
-def test_connect():
-    print('✅ Client connected via WebSocket')
+        logging.error(f"Chat error: {e}")
+        socketio.emit('error_message', {"response": str(e)})
 
 def background_monitor():
     while True:
         try:
-            # ラズパイの温度を取得
             with open("/sys/class/thermal/thermal_zone0/temp", "r") as f:
                 temp = int(f.read()) / 1000.0
-            
-            # ブラウザへ送信
             socketio.emit('sys_status', {'cpu_temp': f"{temp:.1f}"})
-            # print(f"DEBUG: Pi5 Temp is {temp:.1f}") # ターミナルで確認したいならコメント解除
-        except Exception as e:
-            print(f"Monitor error: {e}")
-        
-        # ⚠️ time.sleep ではなく socketio.sleep を使うのが eventlet の作法
+        except: pass
         socketio.sleep(5)
 
-@app.route('/download/<path:filepath>')
-def download_file(filepath):
-    # セキュリティのため、必ず HDD のディレクトリ内に限定する
-    target = os.path.normpath(os.path.join(HDD_BASE, filepath))
-    if not target.startswith(HDD_BASE):
-        return "Access Denied", 403
-    
-    return send_file(target, as_attachment=True)
-
-# lefte_server.py に追記
-@app.route('/upload_to_hdd', methods=['POST'])
-def upload_to_hdd():
-    if 'file' not in request.files:
-        return jsonify({"success": False, "error": "No file"}), 400
-    
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({"success": False, "error": "No filename"}), 400
-
-    filename = secure_filename(file.filename)
-    # HDD内の uploads フォルダに保存
-    save_path = os.path.join(UPLOAD_FOLDER, filename)
-    file.save(save_path)
-    
-    return jsonify({
-        "success": True, 
-        "path": f"uploads/{filename}", # 🚀 'lefte_media/' を取って、ルートからのパスにする
-        "full_path": save_path
-    })
-
-# ダウンロード用（将来的にリンクをクリックした時に発動）
-@app.route('/download/<path:filename>')
-def download_from_hdd(filename):
-    # 安全のため /mnt/hdd1/lefte_media 以下に限定
-    return send_from_directory(HDD_BASE, filename, as_attachment=True)
+# --- 🚀 起動処理 (SSL対応) ---
 
 if __name__ == '__main__':
-    # 🚀 ここは一つだけでOK！
     socketio.start_background_task(background_monitor)
     
     cert_file = os.getenv("CERT_FILE")
     key_file = os.getenv("KEY_FILE")
     
-    if cert_file and key_file and os.path.exists(cert_file):
+    # 証明書とキーの両方が存在する場合のみ SSL モードで起動
+    if cert_file and key_file and os.path.exists(cert_file) and os.path.exists(key_file):
+        logging.info("🔐 SSLモード (HTTPS) で起動します")
         socketio.run(app, host="0.0.0.0", port=5000, 
                      certfile=cert_file, keyfile=key_file)
     else:
+        logging.warning("⚠️ 証明書が見つからないため、通常モード (HTTP) で起動します")
         socketio.run(app, host="0.0.0.0", port=5000)

@@ -2,6 +2,8 @@ const CACHE_NAME = 'lefte-cache-v5.5.1';
 const urlsToCache = [
   '/',
   '/manifest.json',
+  '/static/desktpo.css', // 🚀 ローカルのCSSもキャッシュに追加
+  '/static/desktpo.js',  // 🚀 ローカルのJSもキャッシュに追加
   'https://cdn.jsdelivr.net/npm/marked/marked.min.js',
   'https://cdn-icons-png.flaticon.com/512/1698/1698535.png'
 ];
@@ -17,23 +19,22 @@ self.addEventListener('install', event => {
 });
 
 self.addEventListener('fetch', event => {
-  // APIリクエストや動的なコンテンツはキャッシュしない戦略も検討可能ですが、
-  // ここではシンプルにキャッシュ優先、なければネットワークとしています。
-  // チャットの履歴(/history)や送信(/chat)はネットワーク必須なので除外を検討すべきですが、
-  // POSTリクエストはキャッシュされないため、GETの/historyのみ注意が必要です。
+  const url = new URL(event.request.url);
 
-  if (event.request.method !== 'GET') {
-    return;
+  // 🚀 Socket.IO, POSTリクエスト, そして「履歴API(/history)」はキャッシュさせない
+  // これにより、リロードした時に常に最新の履歴がDBから読み込まれます
+  if (
+    url.pathname.startsWith('/socket.io') || 
+    url.pathname.startsWith('/history') || 
+    event.request.method !== 'GET'
+  ) {
+    return; // 何もしない（通常のネットワーク通信に任せる）
   }
 
   event.respondWith(
-    caches.match(event.request)
-      .then(response => {
-        if (response) {
-          return response;
-        }
-        return fetch(event.request);
-      })
+    caches.match(event.request).then(response => {
+      return response || fetch(event.request);
+    })
   );
 });
 
