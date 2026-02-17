@@ -13,20 +13,6 @@
     <title>L.E.F.T.E. v5.5.1 Master</title>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-    <script>
-        // 自身のドメインに接続
-        const socket = io();
-
-        socket.on('connect', () => {
-            console.log('🚀 Connected to LEFTE Core via WSS');
-        });
-
-        // サーバーからデータ（例：温度）が届いた時の処理
-        socket.on('sensor_update', (data) => {
-            console.log('🌡️ New data:', data);
-            // ここでDOMを書き換えて画面を更新する
-        });
-    </script>
 </head>
 <body>
 

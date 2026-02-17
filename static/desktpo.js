@@ -85,10 +85,22 @@ function addMessageToUI(role, text, imageData = null) {
 async function ask() {
     const input = document.getElementById('geminiInput');
     const text = input.value.trim();
-    const model = document.querySelector('input[name="modelSelect"]:checked').value;
-    
     if (!text && !selectedFileBase64) return;
 
+    // 🚀 1. サーバーを待たずに、まずロゴを光らせてバブルを出す（生命感！）
+    const logo = document.querySelector('.brand-logo');
+    if (logo) logo.classList.add('is-thinking');
+    
+    if (!document.getElementById('thinking-bubble')) {
+        const bubble = addMessageToUI('assistant', "確認中だよ……");
+        bubble.id = 'thinking-bubble';
+    }
+
+    // 自分の発言を即座に表示
+    addMessageToUI('user', text, selectedFileBase64);
+    input.value = '';
+
+    // 裏側でアップロード処理
     let imagePath = null;
     if (selectedFileObj) {
         const formData = new FormData();
@@ -100,18 +112,16 @@ async function ask() {
         } catch (err) { console.error("Upload failed", err); }
     }
 
-    addMessageToUI('user', text, selectedFileBase64);
+    // サーバーへ送信
     socket.emit('chat_request', { 
         message: text, 
-        model: model, 
+        model: document.querySelector('input[name="modelSelect"]:checked').value, 
         image: selectedFileBase64, 
         image_url: imagePath, 
         mime_type: selectedMimeType 
     });
 
-    input.value = '';
-    selectedFileBase64 = null;
-    selectedFileObj = null;
+    selectedFileBase64 = null; selectedFileObj = null;
     document.getElementById('preview-container').style.display = 'none';
 }
 
@@ -180,10 +190,13 @@ socket.on('chat_update', (data) => {
     document.getElementById('thinking-bubble')?.remove();
     const logo = document.querySelector('.brand-logo');
     if (logo) logo.classList.remove('is-thinking');
-
-    const lastUserMsg = chatHistory.querySelector('.message.user:last-child .message-text');
-    if (!lastUserMsg || lastUserMsg.innerText !== data.user_message) {
+    const lastUserMsg = chatHistory.querySelector('.message.user:last-child');
+    const lastText = lastUserMsg ? (lastUserMsg.querySelector('.message-text')?.innerText || "") : "";
+    if (!lastUserMsg || lastText !== data.user_message) {
         addMessageToUI('user', data.user_message, data.image_url);
+    } else if (data.image_url && lastUserMsg) {
+        const img = lastUserMsg.querySelector('img');
+        if (img) img.src = "/" + data.image_url;
     }
     addMessageToUI('assistant', data.response);
 });

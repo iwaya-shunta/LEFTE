@@ -1,4 +1,4 @@
-import os, re, requests, time, logging
+import os, re, requests, time, logging, base64
 from logging.handlers import RotatingFileHandler
 from datetime import datetime
 from flask import Flask, jsonify, request, send_from_directory, send_file
@@ -50,6 +50,24 @@ tools = [
     hdd_actions.read_hdd_text_file
 ]
 
+FUNCTIONAL_RULES = """
+1. カレンダー/ドライブ等は当然の日常として使い、説明は不要。
+2. 簡潔に回答せよ。
+3. アプリを起動する際は、ツールが返した '🚀LAUNCH_SIGNAL:...' を必ず含めること。
+4. ツール実行に失敗した場合は、技術的なエラーログを出すのではなく、ユーザーに「何ができなかったか」を1行で伝える。
+5. 音声合成（Voicevox）で読み上げるため、URLや複雑な記号、メタデータは本文に含めない。
+6. ユーザーを「しゅんた」と認識し、適度な距離感のアシスタントとして振る舞う。
+"""
+
+def get_system_instruction():
+    personality_path = os.path.join(BASE_DIR, "personality.txt")
+    if os.path.exists(personality_path):
+        with open(personality_path, "r", encoding="utf-8") as f:
+            personality = f.read()
+    else:
+        personality = "あなたは助手の L.E.F.T.E. です。"
+    return f"{personality}\n{FUNCTIONAL_RULES}"
+
 # --- 音声生成 (Voicevox) ---
 def generate_voice(text, speaker_id=8, filename="response.wav"):
     clean_text = re.sub(r'\(.*?\)|（.*?）', '', text)
@@ -84,13 +102,21 @@ def serve_wav(filename):
 @app.route('/upload_to_hdd', methods=['POST'])
 def upload_to_hdd():
     file = request.files.get('file')
-    if not file: return jsonify({"success": False}), 400
+    if not file or file.filename == '':
+        return jsonify({"success": False, "error": "No file"}), 400
+    # 🚀 修正：拡張子をしっかり取り出し、ドットを維持する
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext not in ['.jpg', '.jpeg', '.png', '.gif', '.webp']:
+        ext = '.jpg' # 不明な場合は jpg に固定
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    filename = f"{timestamp}_{secure_filename(file.filename)}"
-    if filename.endswith('_'): filename += "image.jpg"
+    filename = f"{timestamp}{ext}" # 例: 20260217_231500.jpg
     save_path = os.path.join(UPLOAD_FOLDER, filename)
     file.save(save_path)
-    return jsonify({"success": True, "path": f"uploads/{filename}"})
+    logging.info(f"💾 HDD保存完了: {filename}")
+    return jsonify({
+        "success": True, 
+        "path": f"uploads/{filename}"
+    })
 
 # --- WebSocket 処理 ---
 @socketio.on('chat_request')
@@ -103,29 +129,60 @@ def process_chat_task(data):
     image_b64 = data.get('image')
     image_url = data.get('image_url')
     mime_type = data.get('mime_type')
-    
+    model_name = data.get('model', 'gemini-3-flash-preview')
+
     try:
+        # 1. ユーザーの入力を保存
         chat_storage.save_message('user', user_input, image_url)
-        past_rows = chat_storage.get_today_history()
-        contents = [{"role": ("user" if r[1] == "user" else "model"), "parts": [{"text": r[2]}]} for r in past_rows[-11:-1]]
         
+        # 2. 履歴の構築（画像を含めるように強化！）
+        past_rows = chat_storage.get_today_history()
+        contents = []
+        
+        # 直近10件分をループ
+        for r in past_rows[-11:-1]:
+            role = "user" if r[1] == "user" else "model"
+            text = r[2]
+            saved_img_path = r[3] # DBに保存された uploads/xxx.jpg
+            
+            parts = [{"text": text}]
+            
+            # 🚀 過去のメッセージに画像パスがあれば、HDDから読み込んで履歴に含める
+            if saved_img_path:
+                # HDD上のフルパスを構築
+                full_path = os.path.join(HDD_BASE, saved_img_path.replace("uploads/", ""))
+                if os.path.exists(full_path):
+                    with open(full_path, "rb") as f:
+                        # 画像をBase64に変換して Gemini に送る準備
+                        img_encoded = base64.b64encode(f.read()).decode('utf-8')
+                        ext = os.path.splitext(saved_img_path)[1].lower()
+                        mtype = "image/png" if ext == ".png" else "image/jpeg"
+                        parts.append({"inline_data": {"data": img_encoded, "mime_type": mtype}})
+            
+            contents.append({"role": role, "parts": parts})
+
+        # 3. 今回の最新メッセージを追加
         user_parts = [{"text": f"【現在時刻: {datetime.now().strftime('%H:%M:%S')}】\n{user_input}"}]
         if image_b64 and mime_type:
             user_parts.append({"inline_data": {"data": image_b64, "mime_type": mime_type}})
+        
         contents.append({"role": "user", "parts": user_parts})
 
+        # 4. Gemini API 呼び出し
         response = client.models.generate_content(
-            model=data.get('model', 'gemini-3-flash-preview'),
+            model=model_name,
             contents=contents,
             config=types.GenerateContentConfig(
-                system_instruction="あなたはL.E.F.T.E.です。", 
-                tools=tools, 
+                system_instruction=get_system_instruction(),
+                tools=tools,
                 automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=False)
             )
         )
+        
         full_text = response.text or "完了だよ。"
         chat_storage.save_message('assistant', full_text)
 
+        # 5. 音声生成とUI更新
         voice_filename = f"v_{int(time.time())}.wav"
         generate_voice(full_text, filename=os.path.join(VOICE_DIR, voice_filename))
 
@@ -135,6 +192,7 @@ def process_chat_task(data):
             "voice_url": f"/wav_files/{voice_filename}",
             "image_url": image_url
         })
+
     except Exception as e:
         logging.error(f"Chat error: {e}")
         socketio.emit('error_message', {"response": str(e)})
