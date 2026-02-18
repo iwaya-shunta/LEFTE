@@ -2,10 +2,11 @@ const CACHE_NAME = 'lefte-cache-v5.5.1';
 const urlsToCache = [
   '/',
   '/manifest.json',
-  '/static/desktpo.css', // 🚀 ローカルのCSSもキャッシュに追加
-  '/static/desktpo.js',  // 🚀 ローカルのJSもキャッシュに追加
-  'https://cdn.jsdelivr.net/npm/marked/marked.min.js',
-  'https://cdn-icons-png.flaticon.com/512/1698/1698535.png'
+  '/desktpo.css',
+  '/desktpo.js',
+  '/icon-192.png', // 🚀 追加：PWAのインストールに必須
+  '/icon-512.png', // 🚀 追加：スプラッシュ画面に必須
+  'https://cdn.jsdelivr.net/npm/marked/marked.min.js'
 ];
 
 self.addEventListener('install', event => {
@@ -13,6 +14,8 @@ self.addEventListener('install', event => {
     caches.open(CACHE_NAME)
       .then(cache => {
         console.log('Opened cache');
+        // 🚀 外部アイコンは、もしエラーが出てもインストールを止めないように
+        // 個別に add するか、リストから外して fetch 時に任せるのが安全だよ
         return cache.addAll(urlsToCache);
       })
   );

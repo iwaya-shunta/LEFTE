@@ -1,308 +1,288 @@
-:root { --bg: #131314; --card: #1e1f20; --text: #e3e3e3; --accent: #8ab4f8; --border: #444746; }
-        * { box-sizing: border-box; }
-        body { margin: 0; padding: 10px; font-family: sans-serif; background: var(--bg); color: var(--text); display: grid; grid-template-columns: 1fr 1.2fr 1fr; grid-template-rows: 90px 1fr; gap: 12px; height: 95vh; width: 100vw; overflow: hidden; }
+/* --- 1. 基本設定 --- */
+:root {
+    --bg: #131314;
+    --card: #1e1f20;
+    --text: #e3e3e3;
+    --accent: #8ab4f8;
+    --border: #444746;
+}
 
-        /* パネル管理 */
-        .panel { display: flex; flex-direction: column; gap: 12px; height: 100%; min-height: 0; }
-        .widget { background: var(--card); border-radius: 20px; padding: 15px; border: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
+* { box-sizing: border-box; }
 
-        /* ニュースリストのデザイン */
-        /* 1. スクロールバー（表記）をグレーにする設定 */
-        #chat-history::-webkit-scrollbar {
-            width: 6px;
-        }
-        #chat-history::-webkit-scrollbar-thumb {
-            background: #666; /* つまみをグレーに */
-            border-radius: 10px;
-        }
-        #chat-history::-webkit-scrollbar-track {
-            background: transparent;
-        }
+body {
+    margin: 0;
+    padding: 15px;
+    font-family: 'Hiragino Sans', 'Meiryo', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    display: grid;
+    grid-template-columns: 1fr 1.2fr 1fr;
+    grid-template-rows: 80px 1fr;
+    gap: 15px;
+    height: 95vh;
+    width: 100vw;
+    overflow: hidden;
+}
 
-        /* 2. ニュースのデザインとホバー時のグレー設定 */
-        .news-link, .news-link:visited {
-            color: #bbb !important; /* デフォルトの文字色を少し落ち着いたグレーに */
-            text-decoration: none;
-            font-size: 14px;
-            display: block;
-            padding: 8px 10px;
-            transition: all 0.2s;
-            border-radius: 8px;
-        }
-        /* ウィジェット内の iframe が枠いっぱいに広がるようにする */
-        .widget iframe {
-            border: none;
-            border-radius: 18px;
-            /* カレンダー以外の iframe（地図など）は反転させない */
-        }
+/* --- 2. パネル管理 --- */
+.panel {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    height: 100%;
+    min-height: 0;
+    position: relative;
+}
 
-        #weather-map {
-            filter: none; /* カレンダーに適用されている invert フィルタを解除 */
-        }
-        .news-link:hover {
-            background: rgba(255, 255, 255, 0.1) !important; /* ホバー背景を薄いグレーに */
-            color: #fff !important; /* 文字を白く浮かび上がらせる */
-        }
+.widget {
+    background: var(--card);
+    border-radius: 24px;
+    padding: 20px;
+    border: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
 
-        /* 3. スクロールボタン（▲▼）を控えめな色に変更 */
-        .scroll-controls button {
-            /* ... 既存の設定 ... */
-            color: #888; /* 青（accent）ではなく、落ち着いたグレーに変更 */
-        }
+/* 🚀 ニュースリンクの修正: 青色を排除し、白系で統一 */
+.news-link, .news-link:visited {
+    color: #bbb !important;
+    text-decoration: none;
+    font-size: 14px;
+    display: block;
+    padding: 8px;
+    transition: 0.2s;
+}
+.news-link:hover {
+    color: var(--accent) !important;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+}
 
-        /* トップバー */
-        .top-bar { grid-column: 1 / 4; display: flex; align-items: center; justify-content: space-between; background: var(--card); border-radius: 24px; border: 1px solid var(--border); padding: 0 25px; }
-        .brand { display: flex; align-items: center; gap: 12px; }
-        .brand-logo { width: 32px; height: 32px; filter: drop-shadow(0 0 5px var(--accent)); }
-        #clock { font-size: 34px; font-weight: 200; margin-right: 15px; }
+/* 🚀 カレンダーのダークモード化 */
+iframe {
+    width: 100%;
+    height: 100%;
+    border: none;
+    border-radius: 18px;
+    filter: invert(90%) hue-rotate(180deg) brightness(0.8) contrast(1.2);
+}
+#weather-map { filter: none !important; }
 
-        /* チャットデザイン */
-        #chat-history { flex: 1; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 12px; white-space: pre-wrap; -webkit-overflow-scrolling: touch; }
-        /* チャットデザインの修正案 */
-        .message { max-width: 85%; padding: 12px 16px; border-radius: 18px; font-size: 14px; line-height: 1.5; opacity: 0; transform: translateY(10px); transition: 0.3s ease-out; position: relative; overflow-wrap: anywhere; word-break: break-word;}
-        .message.show { opacity: 1; transform: translateY(0); }
-        .gemini { background: #1a1a1b; border: 1px solid var(--border); align-self: flex-start; margin-left: 35px; }
-        .user { background: #2b2a2a; align-self: flex-end; }
+/* --- 3. トップバー & AI選択 (image_ca6595.png 対応) --- */
+.top-bar {
+    grid-column: 1 / 4;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--card);
+    border-radius: 24px;
+    border: 1px solid var(--border);
+    padding: 0 30px;
+}
 
-        /* メッセージコンテンツの配置 */
-        .message-content {
-            display: flex;
-            flex-direction: column;
-        }
+.model-selector {
+    display: flex;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 15px;
+    padding: 3px;
+    gap: 2px;
+}
 
-        /* タイムスタンプのスタイル */
-        .message-time {
-            font-size: 0.7rem;
-            color: rgba(255, 255, 255, 0.4);
-            margin-top: 4px;
-            align-self: flex-end; /* 右側に寄せる */
-        }
+.model-selector input { display: none; } /* 🚀 ラジオボタンの丸を隠す */
 
-        /* ユーザー側のタイムスタンプは左側に寄せたい場合は調整 */
-        .message.user .message-time {
-            color: rgba(255, 255, 255, 0.5);
-            align-self: flex-end;
-        }
+.model-selector label {
+    padding: 6px 15px;
+    border-radius: 12px;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: bold;
+    color: #888;
+    transition: 0.3s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
 
-        /* バブル自体のレイアウト調整 */
-        .message {
-            display: flex;
-            flex-direction: column; /* 縦並びに */
-            max-width: 80%;
-            margin-bottom: 15px;
-        }
+.model-selector input:checked + label {
+    background: var(--card);
+    color: var(--accent);
+    box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+}
 
-        /* コードブロック・コピーボタン */
-        pre { position: relative; background: #000 !important; padding: 15px; border-radius: 10px; border: 1px solid var(--border); margin: 10px 0; overflow-x: auto; }
-        code { color: #fff; font-family: monospace; }
-        .copy-btn { position: absolute; top: 8px; right: 8px; background: #333; border: 1px solid var(--border); color: #fff; border-radius: 5px; cursor: pointer; font-size: 11px; padding: 4px 8px; opacity: 0.8; }
-        .copy-btn:hover { opacity: 1; background: var(--accent); color: var(--bg); }
+/* --- 4. チャット & マイクボタン (image_ca689a.png 対応) --- */
+#chatBox {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
 
-        /* AIアバター */
-        .ai-avatar { position: absolute; left: -35px; top: 0; width: 28px; height: 28px; border-radius: 50%; background: #1a1a1b; border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 11px; color: var(--accent); }
-        .speaking-icon { animation: ai-breathe 1.5s infinite ease-in-out; border-color: var(--accent); }
-        @keyframes ai-breathe { 0% { box-shadow: 0 0 3px var(--accent); } 50% { box-shadow: 0 0 12px var(--accent); } 100% { box-shadow: 0 0 3px var(--accent); } }
+/* 🚀 マイクボタンの反転を修正 */
+#micBtn {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 6px;
+    color: var(--text);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: 0.2s;
+    width: 38px;
+    height: 38px;
+}
 
-        /* 入力エリア */
-        .input-wrapper { background: #28292a; padding: 12px; display: flex; align-items: center; border-radius: 18px; gap: 10px; }
-        #geminiInput { flex: 1; background: transparent; border: none; color: white; outline: none; }
-        #micBtn { background: none; border: none; color: var(--text); cursor: pointer; }
-        .recording #micBtn { color: var(--accent); filter: drop-shadow(0 0 8px var(--accent)); }
+#micBtn:hover { background: rgba(255, 255, 255, 0.1); }
 
-        /* モデルセレクター */
-        .model-selector { display: flex; background: #131314; border: 1px solid var(--border); border-radius: 12px; padding: 3px; }
-        .model-selector input { display: none; }
-        .model-selector label { padding: 6px 12px; border-radius: 9px; cursor: pointer; font-size: 11px; font-weight: bold; color: #888; transition: 0.2s; }
-        .model-selector input:checked + label { background: #1e1f20; color: var(--accent); }
+#micBtn svg {
+    width: 20px;
+    height: 20px;
+    stroke: currentColor;
+}
 
-        /* スクロールボタン（チャットパネル内） */
-        .scroll-controls { position: absolute; right: 20px; bottom: 85px; display: flex; flex-direction: column; gap: 8px; z-index: 100; }
-        .scroll-controls button { width: 42px; height: 42px; border-radius: 50%; background: var(--card); border: 1px solid var(--border); color: var(--accent); cursor: pointer; font-size: 18px; box-shadow: 0 4px 10px rgba(0,0,0,0.4); transition: 0.2s; }
-        .scroll-controls button:active { transform: scale(0.9); background: var(--border); }
+.recording #micBtn {
+    background: var(--accent);
+    color: var(--bg);
+    border-color: var(--accent);
+    box-shadow: 0 0 15px var(--accent);
+}
 
-        iframe { width: 100%; height: 100%; border: none; border-radius: 18px; filter: invert(90%) hue-rotate(180deg); }
+/* 送信ボタンの青矢印 */
+#sendBtn {
+    color: var(--accent) !important;
+    transition: 0.2s;
+}
+#sendBtn:hover { transform: scale(1.1); }
 
-        /* LEFTEが思考中にロゴを青く明滅させる */
-        @keyframes thinking-glow {
-            0% { filter: drop-shadow(0 0 2px var(--accent)); opacity: 0.7; }
-            50% { filter: drop-shadow(0 0 12px var(--accent)); opacity: 1; }
-            100% { filter: drop-shadow(0 0 2px var(--accent)); opacity: 0.7; }
-        }
+#chat-history {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    /* スクロールバーのデザイン */
+}
+#chat-history::-webkit-scrollbar { width: 5px; }
+#chat-history::-webkit-scrollbar-thumb { background: #444; border-radius: 10px; }
 
-        .is-thinking {
-            animation: thinking-glow 1.5s infinite ease-in-out;
-            color: var(--accent) !important;
-        }
+.message {
+    max-width: 85%;
+    padding: 12px 16px;
+    border-radius: 18px;
+    font-size: 14px;
+    line-height: 1.6;
+    position: relative;
+    opacity: 0;
+    transform: translateY(10px);
+    transition: 0.3s ease-out;
+}
+.message.show { opacity: 1; transform: translateY(0); }
 
-        /* 思考中のドットアニメーション（...の部分を動かしたい場合） */
-        /* ドットに動きをつける（もし追加していなければ） */
-        #thinking-bubble .res-txt {
-            font-weight: bold;
-            display: inline-block;
-            min-width: 24px;
-        }
+.gemini { background: #1a1a1b; border: 1px solid var(--border); align-self: flex-start; margin-left: 40px; }
+.user { background: #2b2a2a; align-self: flex-end; border-bottom-right-radius: 4px; }
 
-        #thinking-bubble .res-txt::after {
-            content: '';
-            animation: dots-blink 1.5s infinite steps(4);
-        }
+.ai-avatar {
+    position: absolute; left: -40px; top: 4px;
+    width: 32px; height: 32px; border-radius: 50%;
+    background: #1a1a1b; border: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; color: var(--accent);
+}
 
-        /* desktpo.css に追加 */
-        .voice-btn {
-            background: rgba(138, 180, 248, 0.1) !important; /* 薄いアクセントカラー */
-            border: 1px solid var(--border) !important;
-            border-radius: 8px !important;
-            color: var(--accent) !important;
-            padding: 2px 6px !important;
-            font-size: 12px !important;
-            transition: 0.2s;
-            display: flex;
-            align-items: center;
-            gap: 4px;
-        }
+/* 入力欄全体 */
+.input-wrapper {
+    background: #28292a;
+    padding: 8px 15px;
+    display: flex;
+    align-items: center;
+    border-radius: 20px;
+    gap: 12px;
+}
 
-        .voice-btn:hover {
-            background: rgba(138, 180, 248, 0.2) !important;
-            transform: scale(1.05);
-        }
+#geminiInput { flex: 1; background: transparent; border: none; color: white; outline: none; }
 
-        /* 2. メッセージ下部のレイアウト調整 */
-        .message-footer {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-top: 8px;
-            padding-top: 4px;
-            border-top: 1px solid rgba(255, 255, 255, 0.05);
-        }
+/* 🚀 スクロールボタンの固定 */
+.scroll-controls {
+    position: absolute;
+    right: 20px;
+    bottom: 90px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    z-index: 100;
+}
+.scroll-controls button {
+    width: 40px; height: 40px; border-radius: 50%;
+    background: var(--card); border: 1px solid var(--border);
+    color: var(--accent); cursor: pointer; font-size: 18px;
+}
 
-        /* desktpo.css */
-        .input-wrapper {
-            gap: 15px; /* ボタン同士の間隔を広げる */
-        }
+/* --- 5. モバイル/PC 切り替え --- */
+.bottom-nav { display: none; }
 
-        #geminiInput {
-            font-size: 15px;
-        }
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
 
-        /* 🔊 テストボタンを少し控えめにする */
-        #testVoiceBtn {
-            opacity: 0.6;
-            transition: 0.3s;
-        }
-        #testVoiceBtn:hover {
-            opacity: 1;
-            color: var(--accent);
-        }
+.brand-logo {
+    width: 32px !important;  /* 🚀 サイズを厳密に固定 */
+    height: 32px !important;
+    min-width: 32px;
+    flex-shrink: 0;
+    filter: drop-shadow(0 0 5px var(--accent));
+}
 
-        /* --- IDを chatBox に統一して整理 --- */
-        #chatBox {
-            flex: 1;
-            overflow-y: auto;
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-            white-space: pre-wrap;
-        }
+@media (max-width: 768px) {
+    body {
+        margin: 0 !important;
+        width: 100vw !important;
+        height: 100dvh !important; /* スマホは動的ビューポート全画面 */
+        display: flex !important;
+        flex-direction: column !important;
+        border-radius: 0;
+        padding-top: env(safe-area-inset-top);
+    }
 
-        /* スクロールバーのデザインを chatBox に適用 */
-        #chatBox::-webkit-scrollbar { width: 6px; }
-        #chatBox::-webkit-scrollbar-thumb { background: #444; border-radius: 10px; }
-        #chatBox::-webkit-scrollbar-track { background: transparent; }
+    .top-bar { grid-column: auto; height: 60px; border-radius: 0; padding: 0 15px; }
 
-        /* メッセージバブルの共通設定 */
-        .message {
-            max-width: 80%;
-            padding: 12px 16px;
-            border-radius: 18px;
-            font-size: 14px;
-            line-height: 1.6;
-            position: relative;
-            opacity: 0;
-            transform: translateY(10px);
-            transition: 0.3s ease-out;
-        }
-        .message.show { opacity: 1; transform: translateY(0); }
+    /* 🚀 修正：アクティブなパネルを確実に表示し、真っ黒を回避 */
+    .panel {
+        display: none !important;
+        width: 100% !important;
+        height: calc(100% - 150px) !important; /* ナビを避ける計算 */
+        padding: 10px !important;
+    }
+    .panel.active-panel { display: flex !important; }
 
-        /* ボク（L.E.F.T.E.）の吹き出し */
-        .gemini {
-            background: #1e1f20;
-            border: 1px solid var(--border);
-            align-self: flex-start;
-            margin-left: 40px; /* アバター分の余白 */
-        }
+    /* 🚀 修正：タスクバーを避けるフローティング・ナビ */
+    .bottom-nav {
+        display: flex !important;
+        position: fixed;
+        bottom: 25px; /* 下から浮かせる */
+        left: 15px;
+        right: 15px;
+        width: calc(100% - 30px);
+        height: 65px;
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 25px; /* カプセルデザイン */
+        justify-content: space-around;
+        align-items: center;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+        z-index: 1000;
+        padding-bottom: 0;
+    }
 
-        /* しゅんた（ユーザー）の吹き出し */
-        .user {
-            background: #2b2a2a;
-            color: #fff;
-            align-self: flex-end;
-            border-bottom-right-radius: 4px;
-        }
-
-        /* AIアバターの位置を微調整 */
-        .ai-avatar {
-            position: absolute;
-            left: -40px;
-            top: 4px;
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            background: #1a1a1b;
-            border: 1px solid var(--border);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 12px;
-            color: var(--accent);
-        }
-
-        /* 吹き出し下のフッター（時間と再生ボタン） */
-        .message-footer {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-top: 8px;
-            font-size: 11px;
-        }
-
-        .voice-btn {
-            background: rgba(138, 180, 248, 0.1) !important;
-            border: 1px solid rgba(138, 180, 248, 0.2) !important;
-            color: var(--accent) !important;
-            padding: 3px 8px !important;
-            border-radius: 12px !important;
-            cursor: pointer;
-            font-size: 10px !important;
-            display: flex;
-            align-items: center;
-            gap: 4px;
-        }
-
-        /* モバイル対応 */
-        /* desktpo.css の最後にある @media 部分を強化 */
-        @media (max-width: 768px) {
-            body {
-                display: flex !important;
-                flex-direction: column !important;
-                height: 100dvh !important;
-                padding: 0 !important;
-            }
-            .panel {
-                display: none !important; /* 基本は全部消す */
-                height: calc(100% - 130px) !important; /* 上下のバーを除いた高さ */
-            }
-            /* JSでクラスがついた時だけ表示 */
-            .panel.active-panel {
-                display: flex !important;
-                flex-direction: column !important;
-            }
-            .bottom-nav {
-                display: flex !important;
-                position: fixed;
-                bottom: 0;
-                width: 100%;
-                z-index: 1000;
-            }
-        }
+    .nav-item { background: none; border: none; color: #888; display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 10px; }
+    .nav-item.active { color: var(--accent); }
+    
+    .scroll-controls { display: none !important; }
+}

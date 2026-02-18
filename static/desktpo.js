@@ -2,8 +2,9 @@ const socket = io();
 
 // 状態管理変数
 let selectedFileBase64 = null, selectedMimeType = null, selectedFileObj = null;
+let scrollInterval;
 
-// 🚀 修正：HTMLのIDが chatBox でも chat-history でも動くようにガード
+// 🚀 IDの不整合対策（HTML側がどちらのIDでも動作するようにガード）
 const getChatElement = () => document.getElementById('chatBox') || document.getElementById('chat-history');
 
 // デフォルトの座標（広島周辺）
@@ -104,29 +105,29 @@ function playVoice(url) {
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
 if (!SpeechRecognition) {
-    console.error("❌ このブラウザは音声認識に対応していないよ。Chromeを使ってね！");
+    console.error("❌ このブラウザは音声認識に対応していない。Chromeを使用すること。");
 } else {
     const recognition = new SpeechRecognition();
     recognition.lang = 'ja-JP';
-    recognition.interimResults = true; // 途中経過も取るように変更（反応を良くするため）
+    recognition.interimResults = true;
     recognition.continuous = false;
 
     const micBtn = document.getElementById('micBtn');
     
     recognition.onstart = () => {
-        console.log("🎤 音声認識スタート！話しかけてみて。");
+        console.log("🎤 音声認識開始。");
         micBtn?.classList.add('recording');
     };
 
     recognition.onerror = (event) => {
         console.error("❌ 音声認識エラー:", event.error);
         if (event.error === 'not-allowed') {
-            alert("マイクの使用が許可されていないよ！ブラウザの設定を確認してね。");
+            alert("マイクの使用が許可されていない。設定を確認すること。");
         }
     };
 
     recognition.onend = () => {
-        console.log("🎤 音声認識が終了したよ。");
+        console.log("🎤 音声認識終了。");
         micBtn?.classList.remove('recording');
     };
 
@@ -134,14 +135,10 @@ if (!SpeechRecognition) {
         const transcript = event.results[0][0].transcript;
         const isFinal = event.results[0].isFinal;
 
-        console.log("📝 認識結果:", transcript, isFinal ? "(確定)" : "(解析中)");
-        
         const inputEl = document.getElementById('geminiInput');
         if (inputEl) {
             inputEl.value = transcript;
-            // 確定したら自動送信
             if (isFinal) {
-                console.log("🚀 確定したので送信するよ！");
                 recognition.stop();
                 ask();
             }
@@ -149,23 +146,23 @@ if (!SpeechRecognition) {
     };
 
     if (micBtn) {
-        micBtn.onclick = () => {
-            console.log("👆 マイクボタンが押されたよ");
-            recognition.start();
-        };
+        micBtn.onclick = () => recognition.start();
     }
 }
+
 // --- 🚀 履歴の読み込み ---
 async function loadHistory() {
     try {
         const res = await fetch('/history');
         if (!res.ok) return;
-        const history = await res.json();
+        const historyData = await res.json();
         const chatBox = getChatElement();
-        if (chatBox) chatBox.innerHTML = '';
-        history.forEach(msg => {
-            addMessageToUI(msg.role, msg.content, msg.image_url, msg.voice_url);
-        });
+        if (chatBox) {
+            chatBox.innerHTML = '';
+            historyData.forEach(msg => {
+                addMessageToUI(msg.role, msg.content, msg.image_url, msg.voice_url);
+            });
+        }
     } catch (e) {
         console.error("📜 履歴読み込みエラー:", e);
     }
@@ -180,10 +177,8 @@ async function ask() {
     const logo = document.querySelector('.brand-logo');
     if (logo) logo.classList.add('is-thinking');
 
-    // ユーザーメッセージを表示
     addMessageToUI('user', text, selectedFileBase64);
     
-    // 思考中バブル
     if (!document.getElementById('thinking-bubble')) {
         const bubble = addMessageToUI('assistant', "確認中だよ……");
         bubble.id = 'thinking-bubble';
@@ -192,7 +187,6 @@ async function ask() {
     const model = document.querySelector('input[name="modelSelect"]:checked').value;
     input.value = '';
 
-    // HDDアップロード処理
     let imagePath = null;
     if (selectedFileObj) {
         const formData = new FormData();
@@ -204,7 +198,6 @@ async function ask() {
         } catch (err) { console.error("Upload failed", err); }
     }
 
-    // サーバーへリクエスト
     socket.emit('chat_request', { 
         message: text, 
         model: model, 
@@ -213,10 +206,23 @@ async function ask() {
         mime_type: selectedMimeType 
     });
 
-    // リセット
     selectedFileBase64 = null; selectedFileObj = null;
     document.getElementById('preview-container').style.display = 'none';
 }
+
+// --- 🚀 スクロール制御 ---
+window.startScroll = function(offset) {
+    const chatBox = getChatElement();
+    if (chatBox) {
+        scrollInterval = setInterval(() => {
+            chatBox.scrollTop += offset;
+        }, 30);
+    }
+};
+
+window.stopScroll = function() {
+    clearInterval(scrollInterval);
+};
 
 // --- 🚀 イベント登録と初期化 ---
 document.addEventListener('DOMContentLoaded', () => {
@@ -235,14 +241,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // テスト再生ボタン
     document.getElementById('testVoiceBtn')?.addEventListener('click', () => {
-        const audio = new Audio('/wav_files/test.wav'); // テスト用ファイルがあれば
-        audio.play().then(() => console.log("Test Play OK")).catch(() => alert("音声準備完了！"));
+        playVoice('/wav_files/test.wav');
     });
 
     if (window.innerWidth <= 768) {
-        switchTab('chat'); // 🚀 スマホなら最初はチャットを開く
+        switchTab('chat');
     }
-
 });
 
 // ファイル選択プレビュー
@@ -266,10 +270,8 @@ socket.on('chat_update', (data) => {
     document.getElementById('thinking-bubble')?.remove();
     document.querySelector('.brand-logo')?.classList.remove('is-thinking');
 
-    // 返答を表示
     addMessageToUI('assistant', data.response, null, data.voice_url);
 
-    // 自動再生
     if (data.voice_url) {
         playVoice(data.voice_url);
     }
@@ -298,11 +300,8 @@ window.switchTab = function(t, e) {
     
     if (e) e.currentTarget.classList.add('active');
     else {
-        // 初期起動時用
         const navItems = document.querySelectorAll('.nav-item');
         if (t === 'news') navItems[0].classList.add('active');
         if (t === 'chat') navItems[1].classList.add('active');
     }
 };
-document.getElementById('sendBtn').onclick = ask;
-document.getElementById('fileBtn').onclick = () => document.getElementById('fileInput').click();
