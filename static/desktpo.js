@@ -1,7 +1,10 @@
 const socket = io();
 
+// 状態管理変数
 let selectedFileBase64 = null, selectedMimeType = null, selectedFileObj = null;
-const chatHistory = document.getElementById('chat-history');
+
+// 🚀 修正：HTMLのIDが chatBox でも chat-history でも動くようにガード
+const getChatElement = () => document.getElementById('chatBox') || document.getElementById('chat-history');
 
 // デフォルトの座標（広島周辺）
 const DEFAULT_LAT = 34.397;
@@ -9,13 +12,13 @@ const DEFAULT_LON = 132.475;
 
 // --- 🚀 ウィジェット（時計・ニュース・天気）の更新 ---
 async function updateWidgets() {
-    // 時計の更新（1秒ごと）
+    // 時計（1秒ごと）
     setInterval(() => {
         const clockEl = document.getElementById('clock');
         if (clockEl) clockEl.innerText = new Date().toLocaleTimeString('ja-JP', {hour:'2-digit', minute:'2-digit'});
     }, 1000);
 
-    // ニュースの取得
+    // ニュース取得
     fetch(`https://api.rss2json.com/v1/api.json?rss_url=https://news.google.com/rss?hl=ja&gl=JP&ceid=JP:ja`)
         .then(r => r.json())
         .then(d => {
@@ -28,7 +31,7 @@ async function updateWidgets() {
             }
         });
 
-    // 天気と地図の更新（位置情報が取れれば現在地、取れなければデフォルト）
+    // 位置情報に基づいた天気
     if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
             (pos) => updateWeatherAndMap(pos.coords.latitude, pos.coords.longitude),
@@ -40,7 +43,6 @@ async function updateWidgets() {
 }
 
 function updateWeatherAndMap(lat, lon) {
-    // 天気
     fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true`)
         .then(r => r.json())
         .then(d => {
@@ -48,7 +50,6 @@ function updateWeatherAndMap(lat, lon) {
             if (weatherEl) weatherEl.innerText = `${Math.round(d.current_weather.temperature)}°C`;
         });
 
-    // 雨雲レーダー
     const mapIframe = document.getElementById('weather-map');
     if (mapIframe) {
         mapIframe.src = `https://embed.windy.com/embed2.html?lat=${lat}&lon=${lon}&detailLat=${lat}&detailLon=${lon}&width=400&height=300&zoom=10&level=surface&overlay=radar&product=radar&menu=&message=&marker=&calendar=now&pressure=&type=map&location=coordinates&detail=&metricWind=default&metricTemp=default&radarRange=-1`;
@@ -56,29 +57,118 @@ function updateWeatherAndMap(lat, lon) {
 }
 
 // --- 🚀 UIへのメッセージ追加 ---
-function addMessageToUI(role, text, imageData = null) {
+function addMessageToUI(role, text, imageData = null, voiceUrl = null) {
+    const chatBox = getChatElement();
+    if (!chatBox) return;
+
     const bubble = document.createElement('div');
-    const displayRole = role === 'assistant' ? 'gemini' : 'user';
+    const displayRole = (role === 'assistant' || role === 'gemini') ? 'gemini' : 'user';
     bubble.className = `message ${displayRole} show`;
 
-    let imgSrc = "";
-    if (imageData) {
-        imgSrc = (imageData.startsWith('uploads/') || imageData.startsWith('/uploads/')) 
-                 ? (imageData.startsWith('/') ? imageData : "/" + imageData)
-                 : "data:image/jpeg;base64," + imageData;
-    }
-
-    const imageHtml = imgSrc ? `<img src="${imgSrc}" style="max-width: 100%; border-radius: 10px; margin-bottom: 8px; display: block;">` : "";
     const timeStr = new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
 
-    if (displayRole === 'gemini') {
-        bubble.innerHTML = `<div class="ai-avatar">L</div><div class="message-content"><div class="res-txt">${marked.parse(text)}</div><span class="message-time">${timeStr}</span></div>`;
-    } else {
-        bubble.innerHTML = `${imageHtml}<div class="message-text">${text}</div><span class="message-time">${timeStr}</span>`;
+    // 画像パスの正規化
+    let imageHtml = "";
+    if (imageData) {
+        const imgSrc = imageData.startsWith('data:') ? imageData : (imageData.startsWith('/') ? imageData : "/" + imageData);
+        imageHtml = `<img src="${imgSrc}" style="max-width: 100%; border-radius: 12px; margin-bottom: 8px; display: block;">`;
     }
-    chatHistory.appendChild(bubble);
-    chatHistory.scrollTop = chatHistory.scrollHeight;
+
+    if (displayRole === 'gemini') {
+        bubble.innerHTML = `
+            <div class="ai-avatar">L</div>
+            <div class="message-content">
+                <div class="res-txt">${marked.parse(text)}</div>
+                <div class="message-footer" style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
+                    <span class="message-time" style="font-size:10px; opacity:0.5;">${timeStr}</span>
+                    ${voiceUrl ? `<button class="voice-btn" onclick="playVoice('${voiceUrl}')">🔊 Listen</button>` : ''}
+                </div>
+            </div>`;
+    } else {
+        bubble.innerHTML = `${imageHtml}<div class="message-text">${text}</div><span class="message-time" style="align-self:flex-end; font-size:10px; opacity:0.5; margin-top:4px;">${timeStr}</span>`;
+    }
+    
+    chatBox.appendChild(bubble);
+    chatBox.scrollTop = chatBox.scrollHeight;
     return bubble;
+}
+
+// --- 🚀 音声再生（キャッシュ対策済み） ---
+function playVoice(url) {
+    // 🚀 タイムスタンプを付けてブラウザのキャッシュと転送エラーを回避
+    const audio = new Audio(url + "?t=" + new Date().getTime());
+    audio.play().catch(e => console.error("🔊 音声再生エラー:", e));
+}
+
+// --- 🚀 音声認識（マイク） ---
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+if (!SpeechRecognition) {
+    console.error("❌ このブラウザは音声認識に対応していないよ。Chromeを使ってね！");
+} else {
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'ja-JP';
+    recognition.interimResults = true; // 途中経過も取るように変更（反応を良くするため）
+    recognition.continuous = false;
+
+    const micBtn = document.getElementById('micBtn');
+    
+    recognition.onstart = () => {
+        console.log("🎤 音声認識スタート！話しかけてみて。");
+        micBtn?.classList.add('recording');
+    };
+
+    recognition.onerror = (event) => {
+        console.error("❌ 音声認識エラー:", event.error);
+        if (event.error === 'not-allowed') {
+            alert("マイクの使用が許可されていないよ！ブラウザの設定を確認してね。");
+        }
+    };
+
+    recognition.onend = () => {
+        console.log("🎤 音声認識が終了したよ。");
+        micBtn?.classList.remove('recording');
+    };
+
+    recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        const isFinal = event.results[0].isFinal;
+
+        console.log("📝 認識結果:", transcript, isFinal ? "(確定)" : "(解析中)");
+        
+        const inputEl = document.getElementById('geminiInput');
+        if (inputEl) {
+            inputEl.value = transcript;
+            // 確定したら自動送信
+            if (isFinal) {
+                console.log("🚀 確定したので送信するよ！");
+                recognition.stop();
+                ask();
+            }
+        }
+    };
+
+    if (micBtn) {
+        micBtn.onclick = () => {
+            console.log("👆 マイクボタンが押されたよ");
+            recognition.start();
+        };
+    }
+}
+// --- 🚀 履歴の読み込み ---
+async function loadHistory() {
+    try {
+        const res = await fetch('/history');
+        if (!res.ok) return;
+        const history = await res.json();
+        const chatBox = getChatElement();
+        if (chatBox) chatBox.innerHTML = '';
+        history.forEach(msg => {
+            addMessageToUI(msg.role, msg.content, msg.image_url, msg.voice_url);
+        });
+    } catch (e) {
+        console.error("📜 履歴読み込みエラー:", e);
+    }
 }
 
 // --- 🚀 送信処理 ---
@@ -87,20 +177,22 @@ async function ask() {
     const text = input.value.trim();
     if (!text && !selectedFileBase64) return;
 
-    // 🚀 1. サーバーを待たずに、まずロゴを光らせてバブルを出す（生命感！）
     const logo = document.querySelector('.brand-logo');
     if (logo) logo.classList.add('is-thinking');
+
+    // ユーザーメッセージを表示
+    addMessageToUI('user', text, selectedFileBase64);
     
+    // 思考中バブル
     if (!document.getElementById('thinking-bubble')) {
         const bubble = addMessageToUI('assistant', "確認中だよ……");
         bubble.id = 'thinking-bubble';
     }
 
-    // 自分の発言を即座に表示
-    addMessageToUI('user', text, selectedFileBase64);
+    const model = document.querySelector('input[name="modelSelect"]:checked').value;
     input.value = '';
 
-    // 裏側でアップロード処理
+    // HDDアップロード処理
     let imagePath = null;
     if (selectedFileObj) {
         const formData = new FormData();
@@ -112,25 +204,28 @@ async function ask() {
         } catch (err) { console.error("Upload failed", err); }
     }
 
-    // サーバーへ送信
+    // サーバーへリクエスト
     socket.emit('chat_request', { 
         message: text, 
-        model: document.querySelector('input[name="modelSelect"]:checked').value, 
-        image: selectedFileBase64, 
+        model: model, 
+        image: imagePath ? null : selectedFileBase64, 
         image_url: imagePath, 
         mime_type: selectedMimeType 
     });
 
+    // リセット
     selectedFileBase64 = null; selectedFileObj = null;
     document.getElementById('preview-container').style.display = 'none';
 }
 
-// --- 🚀 起動時処理とイベント登録 ---
+// --- 🚀 イベント登録と初期化 ---
 document.addEventListener('DOMContentLoaded', () => {
     loadHistory();
-    updateWidgets(); // ウィジェット起動
+    updateWidgets();
 
-    // エンターキーで送信する設定
+    document.getElementById('sendBtn').onclick = ask;
+    document.getElementById('fileBtn').onclick = () => document.getElementById('fileInput').click();
+
     document.getElementById('geminiInput').addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
@@ -138,11 +233,19 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // タブ切り替え機能の初期化
-    if (window.innerWidth <= 768) switchTab('chat');
+    // テスト再生ボタン
+    document.getElementById('testVoiceBtn')?.addEventListener('click', () => {
+        const audio = new Audio('/wav_files/test.wav'); // テスト用ファイルがあれば
+        audio.play().then(() => console.log("Test Play OK")).catch(() => alert("音声準備完了！"));
+    });
+
+    if (window.innerWidth <= 768) {
+        switchTab('chat'); // 🚀 スマホなら最初はチャットを開く
+    }
+
 });
 
-// ファイル選択（プレビューのみ）
+// ファイル選択プレビュー
 document.getElementById('fileInput').onchange = (e) => {
     const f = e.target.files[0];
     if (!f) return;
@@ -158,16 +261,19 @@ document.getElementById('fileInput').onchange = (e) => {
     r.readAsDataURL(f);
 };
 
-// 履歴読み込み
-async function loadHistory() {
-    const res = await fetch('/history');
-    if (!res.ok) return;
-    const history = await res.json();
-    chatHistory.innerHTML = '';
-    history.forEach(msg => addMessageToUI(msg.role, msg.content, msg.image_url));
-}
+// Socketイベント
+socket.on('chat_update', (data) => {
+    document.getElementById('thinking-bubble')?.remove();
+    document.querySelector('.brand-logo')?.classList.remove('is-thinking');
 
-// --- 🚀 Socket受信イベント ---
+    // 返答を表示
+    addMessageToUI('assistant', data.response, null, data.voice_url);
+
+    // 自動再生
+    if (data.voice_url) {
+        playVoice(data.voice_url);
+    }
+});
 
 socket.on('sys_status', (data) => {
     const tempEl = document.getElementById('cpu-temp');
@@ -177,45 +283,26 @@ socket.on('sys_status', (data) => {
     }
 });
 
-socket.on('ai_thinking', () => {
-    const logo = document.querySelector('.brand-logo');
-    if (logo) logo.classList.add('is-thinking');
-    if (!document.getElementById('thinking-bubble')) {
-        const bubble = addMessageToUI('assistant', "確認中だよ……");
-        bubble.id = 'thinking-bubble';
-    }
-});
-
-socket.on('chat_update', (data) => {
-    document.getElementById('thinking-bubble')?.remove();
-    const logo = document.querySelector('.brand-logo');
-    if (logo) logo.classList.remove('is-thinking');
-    const lastUserMsg = chatHistory.querySelector('.message.user:last-child');
-    const lastText = lastUserMsg ? (lastUserMsg.querySelector('.message-text')?.innerText || "") : "";
-    if (!lastUserMsg || lastText !== data.user_message) {
-        addMessageToUI('user', data.user_message, data.image_url);
-    } else if (data.image_url && lastUserMsg) {
-        const img = lastUserMsg.querySelector('img');
-        if (img) img.src = "/" + data.image_url;
-    }
-    addMessageToUI('assistant', data.response);
-});
-
-socket.on('error_message', (data) => {
-    document.getElementById('thinking-bubble')?.remove();
-    const logo = document.querySelector('.brand-logo');
-    if (logo) logo.classList.remove('is-thinking');
-    addMessageToUI('assistant', `⚠️ ${data.response}`);
-});
-
-// --- 🚀 グローバル関数（HTMLから呼び出す用） ---
 window.switchTab = function(t, e) {
-    document.querySelectorAll('.panel').forEach(p => { p.style.display = 'none'; p.classList.remove('active-panel'); });
+    document.querySelectorAll('.panel').forEach(p => { 
+        p.style.display = 'none'; 
+        p.classList.remove('active-panel'); 
+    });
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    
     const target = document.getElementById(t + '-panel');
-    if (target) { target.style.display = 'flex'; target.classList.add('active-panel'); }
+    if (target) { 
+        target.style.display = 'flex'; 
+        target.classList.add('active-panel'); 
+    }
+    
     if (e) e.currentTarget.classList.add('active');
+    else {
+        // 初期起動時用
+        const navItems = document.querySelectorAll('.nav-item');
+        if (t === 'news') navItems[0].classList.add('active');
+        if (t === 'chat') navItems[1].classList.add('active');
+    }
 };
-
 document.getElementById('sendBtn').onclick = ask;
 document.getElementById('fileBtn').onclick = () => document.getElementById('fileInput').click();

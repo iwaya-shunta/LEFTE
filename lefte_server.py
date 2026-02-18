@@ -20,6 +20,7 @@ CORS(app)
 VOICEVOX_URL = os.getenv("VOICEVOX_URL", "http://127.0.0.1:50021")
 HDD_BASE = '/mnt/hdd1/lefte_media'
 VOICE_DIR = os.path.join(HDD_BASE, 'voices')
+os.makedirs(VOICE_DIR, exist_ok=True)
 UPLOAD_FOLDER = os.path.join(HDD_BASE, 'uploads')
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -126,45 +127,42 @@ def handle_chat(data):
 
 def process_chat_task(data):
     user_input = data.get('message', '')
-    image_b64 = data.get('image')
-    image_url = data.get('image_url')
+    image_b64 = data.get('image') # Socket.IO経由のデータ
+    image_url = data.get('image_url') # HDD上のパス
     mime_type = data.get('mime_type')
     model_name = data.get('model', 'gemini-3-flash-preview')
 
     try:
-        # 1. ユーザーの入力を保存
         chat_storage.save_message('user', user_input, image_url)
-        
-        # 2. 履歴の構築（画像を含めるように強化！）
         past_rows = chat_storage.get_today_history()
-        contents = []
         
-        # 直近10件分をループ
+        contents = []
+        # 1. 履歴の構築
         for r in past_rows[-11:-1]:
             role = "user" if r[1] == "user" else "model"
-            text = r[2]
-            saved_img_path = r[3] # DBに保存された uploads/xxx.jpg
-            
-            parts = [{"text": text}]
-            
-            # 🚀 過去のメッセージに画像パスがあれば、HDDから読み込んで履歴に含める
-            if saved_img_path:
-                # HDD上のフルパスを構築
-                full_path = os.path.join(HDD_BASE, saved_img_path.replace("uploads/", ""))
+            parts = [{"text": r[2]}]
+            if r[3]: # image_url
+                full_path = os.path.join(HDD_BASE, r[3]) # 🚀 修正：replaceは不要
                 if os.path.exists(full_path):
                     with open(full_path, "rb") as f:
-                        # 画像をBase64に変換して Gemini に送る準備
-                        img_encoded = base64.b64encode(f.read()).decode('utf-8')
-                        ext = os.path.splitext(saved_img_path)[1].lower()
-                        mtype = "image/png" if ext == ".png" else "image/jpeg"
-                        parts.append({"inline_data": {"data": img_encoded, "mime_type": mtype}})
-            
+                        encoded = base64.b64encode(f.read()).decode('utf-8')
+                        mtype = "image/png" if r[3].endswith('.png') else "image/jpeg"
+                        parts.append({"inline_data": {"data": encoded, "mime_type": mtype}})
             contents.append({"role": role, "parts": parts})
 
-        # 3. 今回の最新メッセージを追加
+        # 2. 今回の入力を構築
         user_parts = [{"text": f"【現在時刻: {datetime.now().strftime('%H:%M:%S')}】\n{user_input}"}]
-        if image_b64 and mime_type:
-            user_parts.append({"inline_data": {"data": image_b64, "mime_type": mime_type}})
+        
+        # 🚀 Socket経由で画像が届かず、HDDパスがある場合はHDDから読み込む
+        final_image_b64 = image_b64
+        if not final_image_b64 and image_url:
+            full_path = os.path.join(HDD_BASE, image_url)
+            if os.path.exists(full_path):
+                with open(full_path, "rb") as f:
+                    final_image_b64 = base64.b64encode(f.read()).decode('utf-8')
+
+        if final_image_b64 and mime_type:
+            user_parts.append({"inline_data": {"data": final_image_b64, "mime_type": mime_type}})
         
         contents.append({"role": "user", "parts": user_parts})
 

@@ -2,14 +2,14 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <link rel="manifest" href="/manifest.json">
     <link rel="stylesheet" href="/desktpo.css">
-    <script src="/desktpo.js" defer></script>
-    <link rel="apple-touch-icon" href="/icon-192.png">
+    <script src="desktpo.js" defer></script>
+    <link rel="apple-touch-icon" href="/static/icon-192.png">
     <meta name="theme-color" content="#131314">
     <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <link rel="manifest" href="/manifest.json"> <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>L.E.F.T.E. v5.5.1 Master</title>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
@@ -25,7 +25,6 @@
     </div>
 
     <div style="display:flex; align-items:center; gap: 20px;">
-        
         <div style="display:flex; align-items:center; opacity: 0.9;">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:6px; opacity:0.7;">
                 <circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>
@@ -47,18 +46,17 @@
             <span id="cpu-temp"> --°C</span>
         </div>
 
-        <button onclick="location.reload()" style="background:#28292a; border:1px solid var(--border); color:white; border-radius:50%; width:30px; height:30px; cursor:pointer; display:flex; align-items:center; justify-content:center; transition: 0.2s;" onmouseover="this.style.background='#3a3b3c'" onmouseout="this.style.background='#28292a'">
+        <button onclick="location.reload()" style="background:#28292a; border:1px solid var(--border); color:white; border-radius:50%; width:30px; height:30px; cursor:pointer; display:flex; align-items:center; justify-content:center; transition: 0.2s;">
             <span style="font-size: 18px; margin-top: -2px;">⟳</span>
         </button>
     </div>
 
     <div class="model-selector">
-    <input type="radio" id="m-flash" name="modelSelect" value="gemini-3-flash-preview" checked>
-    <label for="m-flash">⚡ Flash</label>
-    
-    <input type="radio" id="m-pro" name="modelSelect" value="gemini-3-pro-preview">
-    <label for="m-pro">🧠 Pro</label>
-</div>
+        <input type="radio" id="m-flash" name="modelSelect" value="gemini-3-flash-preview" checked>
+        <label for="m-flash">⚡ Flash</label>
+        <input type="radio" id="m-pro" name="modelSelect" value="gemini-3-pro-preview">
+        <label for="m-pro">🧠 Pro</label>
+    </div>
 </div>
 
 <div id="news-panel" class="panel" style="grid-column: 1;">
@@ -66,16 +64,9 @@
         <h3 style="margin:0 0 10px 0; font-weight:300; font-size:16px;">News</h3>
         <div id="news-container"></div>
     </div>
-
     <div class="widget" style="height: 300px; padding: 0; overflow: hidden; position: relative;">
         <h3 style="position: absolute; top: 10px; left: 15px; margin: 0; font-weight: 300; font-size: 14px; z-index: 10; background: rgba(30, 31, 32, 0.7); padding: 2px 8px; border-radius: 5px;">Weather Map</h3>
-        <iframe
-            id="weather-map"
-            width="100%"
-            height="100%"
-            src="https://embed.windy.com/embed2.html?lat=34.397&lon=132.475&detailLat=34.397&detailLon=132.475&width=400&height=300&zoom=8&level=surface&overlay=radar&product=radar&menu=&message=&marker=&calendar=now&pressure=&type=map&location=coordinates&detail=&metricWind=default&metricTemp=default&radarRange=-1"
-            frameborder="0"
-            style="filter: brightness(0.8) contrast(1.2);"> </iframe>
+        <iframe id="weather-map" width="100%" height="100%" src="https://embed.windy.com/embed2.html?lat=34.397&lon=132.475&detailLat=34.397&detailLon=132.475&width=400&height=300&zoom=8&level=surface&overlay=radar&product=radar&menu=&message=&marker=&calendar=now&pressure=&type=map&location=coordinates&detail=&metricWind=default&metricTemp=default&radarRange=-1" frameborder="0" style="filter: brightness(0.8) contrast(1.2);"> </iframe>
     </div>
 </div>
 
@@ -84,11 +75,14 @@
         <button onmousedown="startScroll(-15)" onmouseup="stopScroll()" onmouseleave="stopScroll()" ontouchstart="startScroll(-15)" ontouchend="stopScroll()">▲</button>
         <button onmousedown="startScroll(15)" onmouseup="stopScroll()" onmouseleave="stopScroll()" ontouchstart="startScroll(15)" ontouchend="stopScroll()">▼</button>
     </div>
-    <div class="widget" style="flex: 1; padding: 0;">
-        <div id="chat-history"></div>
+    <div class="widget" style="flex: 1; padding: 0; display: flex; flex-direction: column;">
+        <div id="chatBox" style="flex: 1; overflow-y: auto; padding: 15px;"></div>
+        
         <div id="preview-container" style="padding:10px; border-top:1px solid var(--border); display:none;"></div>
+        
         <div style="padding:12px;">
             <div class="input-wrapper">
+                <button id="testVoiceBtn" style="background:none; border:none; color:var(--text); font-size:18px; cursor:pointer;">🔊</button>
                 <button id="fileBtn" style="background:none; border:none; color:var(--text); font-size:20px;">＋</button>
                 <input type="text" id="geminiInput" placeholder="ボクに話しかけてね...">
                 <button id="micBtn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg></button>
