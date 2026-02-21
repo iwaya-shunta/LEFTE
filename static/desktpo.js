@@ -1,38 +1,44 @@
 const socket = io();
 
-// 状態管理変数
+// 状態管理
 let selectedFileBase64 = null, selectedMimeType = null, selectedFileObj = null;
 let scrollInterval;
 
-// 🚀 IDの不整合対策（HTML側がどちらのIDでも動作するようにガード）
+// IDの不整合対策
 const getChatElement = () => document.getElementById('chatBox') || document.getElementById('chat-history');
-
-// デフォルトの座標（広島周辺）
 const DEFAULT_LAT = 34.397;
 const DEFAULT_LON = 132.475;
 
-// --- 🚀 ウィジェット（時計・ニュース・天気）の更新 ---
+// ショートカットデータ (Library用)
+// static/desktpo.js の修正箇所
+const myShortcuts = [
+    { name: "YouTube", url: "https://www.youtube.com", icon: "📺", category: "media" },
+    { name: "GitHub", url: "https://github.com", icon: "🐙", category: "work" },
+    { name: "Twitter", url: "https://twitter.com", icon: "🐦", category: "sns" },
+    { name: "Gmail", url: "https://mail.google.com", icon: "📧", category: "work" },
+    { name: "Netflix", url: "https://www.netflix.com", icon: "🎬", category: "media" },
+    
+    // 🚀 ここにゲームを追加！
+    { 
+        name: "ZZZ", 
+        url: "C:\\Program Files\\HoYoPlay\\games\\ZenlessZoneZero Game\\ZenlessZoneZero.exe", 
+        icon: "⚔️", 
+        category: "game",
+        type: "app" // 🚀 type を app にするのがミソ
+    }
+];
+
+// --- 🚀 ウィジェット更新 (時計・ニュース・天気) ---
 async function updateWidgets() {
-    // 時計（1秒ごと）
     setInterval(() => {
         const clockEl = document.getElementById('clock');
         if (clockEl) clockEl.innerText = new Date().toLocaleTimeString('ja-JP', {hour:'2-digit', minute:'2-digit'});
     }, 1000);
 
-    // ニュース取得
-    fetch(`https://api.rss2json.com/v1/api.json?rss_url=https://news.google.com/rss?hl=ja&gl=JP&ceid=JP:ja`)
-        .then(r => r.json())
-        .then(d => {
-            const container = document.getElementById('news-container');
-            if (container) {
-                container.innerHTML = d.items.slice(0, 10).map(i => `
-                    <div class="news-item">
-                        <a href="${i.link}" target="_blank" class="news-link">${i.title}</a>
-                    </div>`).join('');
-            }
-        });
+    // 🚀 ニュース更新 (サーバー経由の /get_news を使用)
+    updateNews();
+    setInterval(updateNews, 3600000);
 
-    // 位置情報に基づいた天気
     if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
             (pos) => updateWeatherAndMap(pos.coords.latitude, pos.coords.longitude),
@@ -43,6 +49,21 @@ async function updateWidgets() {
     }
 }
 
+async function updateNews() {
+    const container = document.getElementById('news-container');
+    if (!container) return;
+    try {
+        const response = await fetch('/get_news');
+        const data = await response.json();
+        if (data.news && data.news.length > 0) {
+            container.innerHTML = data.news.slice(0, 10).map(item => `
+                <div class="news-item">
+                    <a href="${item.link}" target="_blank" class="news-link">▶ ${item.title}</a>
+                </div>`).join('');
+        }
+    } catch (e) { console.error("News error:", e); }
+}
+
 function updateWeatherAndMap(lat, lon) {
     fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true`)
         .then(r => r.json())
@@ -50,14 +71,54 @@ function updateWeatherAndMap(lat, lon) {
             const weatherEl = document.getElementById('weather');
             if (weatherEl) weatherEl.innerText = `${Math.round(d.current_weather.temperature)}°C`;
         });
-
     const mapIframe = document.getElementById('weather-map');
     if (mapIframe) {
         mapIframe.src = `https://embed.windy.com/embed2.html?lat=${lat}&lon=${lon}&detailLat=${lat}&detailLon=${lon}&width=400&height=300&zoom=10&level=surface&overlay=radar&product=radar&menu=&message=&marker=&calendar=now&pressure=&type=map&location=coordinates&detail=&metricWind=default&metricTemp=default&radarRange=-1`;
     }
 }
 
-// --- 🚀 UIへのメッセージ追加 ---
+async function launchApp(path) {
+    const res = await fetch('/launch_app', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: path })
+    });
+    const result = await res.json();
+    if (!result.success) alert("起動エラー: " + result.error);
+}
+
+function renderLauncher(category = 'all') {
+    const grid = document.getElementById('launcher-grid');
+    if (!grid) return;
+    grid.innerHTML = '';
+    const filtered = category === 'all' ? myShortcuts : myShortcuts.filter(s => s.category === category);
+
+    filtered.forEach(item => {
+        const card = document.createElement('a');
+        card.className = "shortcut-card";
+        if (item.type === 'app') {
+            card.href = "#";
+            card.onclick = (e) => { e.preventDefault(); launchApp(item.url); };
+        } else {
+            card.href = item.url;
+            card.target = "_blank";
+        }
+        card.innerHTML = `<div class="icon-box">${item.icon}</div><span>${item.name}</span>`; // 🚀 icon-boxに統一
+        grid.appendChild(card);
+    });
+}
+
+function filterShortcuts(category) {
+    document.querySelectorAll('.genre-item').forEach(el => {
+        el.classList.remove('active');
+        if(el.textContent.includes(category) || (category === 'all' && el.textContent === '全て')) {
+            el.classList.add('active');
+        }
+    });
+    renderLauncher(category);
+}
+
+// --- 💬 チャット機能 (ここが抜けていました！) ---
 function addMessageToUI(role, text, imageData = null, voiceUrl = null) {
     const chatBox = getChatElement();
     if (!chatBox) return;
@@ -65,10 +126,8 @@ function addMessageToUI(role, text, imageData = null, voiceUrl = null) {
     const bubble = document.createElement('div');
     const displayRole = (role === 'assistant' || role === 'gemini') ? 'gemini' : 'user';
     bubble.className = `message ${displayRole} show`;
-
     const timeStr = new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
 
-    // 画像パスの正規化
     let imageHtml = "";
     if (imageData) {
         const imgSrc = imageData.startsWith('data:') ? imageData : (imageData.startsWith('/') ? imageData : "/" + imageData);
@@ -94,103 +153,11 @@ function addMessageToUI(role, text, imageData = null, voiceUrl = null) {
     return bubble;
 }
 
-// --- 🚀 音声再生（キャッシュ対策済み） ---
 function playVoice(url) {
-    // 🚀 タイムスタンプを付けてブラウザのキャッシュと転送エラーを回避
     const audio = new Audio(url + "?t=" + new Date().getTime());
     audio.play().catch(e => console.error("🔊 音声再生エラー:", e));
 }
 
-// --- 🚀 音声認識（マイク） ---
-const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-
-if (!SpeechRecognition) {
-    console.error("❌ このブラウザは音声認識に対応していない。Chromeを使用すること。");
-} else {
-    const recognition = new SpeechRecognition();
-    recognition.lang = 'ja-JP';
-    recognition.interimResults = true;
-    recognition.continuous = false;
-
-    const micBtn = document.getElementById('micBtn');
-    
-    recognition.onstart = () => {
-        console.log("🎤 音声認識開始。");
-        micBtn?.classList.add('recording');
-    };
-
-    recognition.onerror = (event) => {
-        console.error("❌ 音声認識エラー:", event.error);
-        if (event.error === 'not-allowed') {
-            alert("マイクの使用が許可されていない。設定を確認すること。");
-        }
-    };
-
-    recognition.onend = () => {
-        console.log("🎤 音声認識終了。");
-        micBtn?.classList.remove('recording');
-    };
-
-    recognition.onresult = (event) => {
-        const transcript = event.results[0][0].transcript;
-        const isFinal = event.results[0].isFinal;
-
-        const inputEl = document.getElementById('geminiInput');
-        if (inputEl) {
-            inputEl.value = transcript;
-            if (isFinal) {
-                recognition.stop();
-                ask();
-            }
-        }
-    };
-
-    if (micBtn) {
-        micBtn.onclick = () => recognition.start();
-    }
-}
-
-const myShortcuts = [
-    { name: "YouTube", url: "https://www.youtube.com", icon: "📺", category: "media" },
-    { name: "GitHub", url: "https://github.com", icon: "🐙", category: "work" },
-    { name: "Twitter", url: "https://twitter.com", icon: "🐦", category: "sns" },
-    { name: "Gmail", url: "https://mail.google.com", icon: "📧", category: "work" },
-    { name: "Netflix", url: "https://www.netflix.com", icon: "🎬", category: "media" }
-];
-
-function renderLauncher(category = 'all') {
-    const grid = document.getElementById('launcher-grid');
-    grid.innerHTML = ''; // 一旦クリア
-
-    const filtered = category === 'all' 
-        ? myShortcuts 
-        : myShortcuts.filter(s => s.category === category);
-
-    filtered.forEach(item => {
-        const card = document.createElement('a');
-        card.href = item.url;
-        card.target = "_blank";
-        card.className = "shortcut-card";
-        card.innerHTML = `
-            <div class="icon-circle">${item.icon}</div>
-            <span>${item.name}</span>
-        `;
-        grid.appendChild(card);
-    });
-}
-
-function filterShortcuts(category) {
-    // タブのactive状態を切り替え
-    document.querySelectorAll('.genre-item').forEach(el => {
-        el.classList.remove('active');
-        if(el.textContent.includes(category) || (category === 'all' && el.textContent === '全て')) {
-            el.classList.add('active');
-        }
-    });
-    renderLauncher(category);
-}
-
-// --- 🚀 履歴の読み込み ---
 async function loadHistory() {
     try {
         const res = await fetch('/history');
@@ -199,50 +166,17 @@ async function loadHistory() {
         const chatBox = getChatElement();
         if (chatBox) {
             chatBox.innerHTML = '';
-            historyData.forEach(msg => {
-                addMessageToUI(msg.role, msg.content, msg.image_url, msg.voice_url);
-            });
+            historyData.forEach(msg => addMessageToUI(msg.role, msg.content, msg.image_url, msg.voice_url));
         }
-    } catch (e) {
-        console.error("📜 履歴読み込みエラー:", e);
-    }
+    } catch (e) { console.error("📜 履歴読み込みエラー:", e); }
 }
 
-// static/desktpo.js の updateWidgets 内のニュース取得部分を修正
-async function updateNews() {
-    const container = document.getElementById('news-container');
-    if (!container) return;
-
-    try {
-        const response = await fetch('/get_news');
-        const data = await response.json();
-        
-        if (data.news && data.news.length > 0) {
-            container.innerHTML = data.news.slice(0, 10).map(item => `
-                <div class="news-item">
-                    <a href="${item.link}" target="_blank" class="news-link">
-                        ${item.title}
-                    </a>
-                </div>`).join('');
-        } else {
-            container.innerHTML = '<p style="font-size:12px; opacity:0.5; padding:10px;">ニュースがありません</p>';
-        }
-    } catch (e) {
-        console.error("News load error:", e);
-    }
-}
-
-// 既存の updateWidgets から呼び出すか、DOMContentLoaded で実行するようにします
-
-// --- 🚀 送信処理 ---
 async function ask() {
     const input = document.getElementById('geminiInput');
     const text = input.value.trim();
     if (!text && !selectedFileBase64) return;
 
-    const logo = document.querySelector('.brand-logo');
-    if (logo) logo.classList.add('is-thinking');
-
+    document.querySelector('.brand-logo')?.classList.add('is-thinking');
     addMessageToUI('user', text, selectedFileBase64);
     
     if (!document.getElementById('thinking-bubble')) {
@@ -265,32 +199,35 @@ async function ask() {
     }
 
     socket.emit('chat_request', { 
-        message: text, 
-        model: model, 
-        image: imagePath ? null : selectedFileBase64, 
-        image_url: imagePath, 
-        mime_type: selectedMimeType 
+        message: text, model: model, image: imagePath ? null : selectedFileBase64, 
+        image_url: imagePath, mime_type: selectedMimeType 
     });
 
     selectedFileBase64 = null; selectedFileObj = null;
     document.getElementById('preview-container').style.display = 'none';
 }
 
-// --- 🚀 スクロール制御 ---
-window.startScroll = function(offset) {
-    const chatBox = getChatElement();
-    if (chatBox) {
-        scrollInterval = setInterval(() => {
-            chatBox.scrollTop += offset;
-        }, 30);
-    }
-};
+// --- 🎤 音声認識 ---
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+if (SpeechRecognition) {
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'ja-JP';
+    recognition.interimResults = true;
+    recognition.onstart = () => document.getElementById('micBtn')?.classList.add('recording');
+    recognition.onend = () => document.getElementById('micBtn')?.classList.remove('recording');
+    recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        const inputEl = document.getElementById('geminiInput');
+        if (inputEl) {
+            inputEl.value = transcript;
+            if (event.results[0].isFinal) { recognition.stop(); ask(); }
+        }
+    };
+    const micBtn = document.getElementById('micBtn');
+    if (micBtn) micBtn.onclick = () => recognition.start();
+}
 
-window.stopScroll = function() {
-    clearInterval(scrollInterval);
-};
-
-// --- 🚀 イベント登録と初期化 ---
+// --- 🚀 初期化・イベント ---
 document.addEventListener('DOMContentLoaded', () => {
     loadHistory();
     updateWidgets();
@@ -298,25 +235,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.getElementById('sendBtn').onclick = ask;
     document.getElementById('fileBtn').onclick = () => document.getElementById('fileInput').click();
-
     document.getElementById('geminiInput').addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            ask();
-        }
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ask(); }
     });
 
-    // テスト再生ボタン
-    document.getElementById('testVoiceBtn')?.addEventListener('click', () => {
-        playVoice('/wav_files/test.wav');
-    });
-
-    if (window.innerWidth <= 768) {
-        switchTab('chat');
-    }
+    if (window.innerWidth <= 768) switchTab('chat');
 });
 
-// ファイル選択プレビュー
 document.getElementById('fileInput').onchange = (e) => {
     const f = e.target.files[0];
     if (!f) return;
@@ -332,16 +257,11 @@ document.getElementById('fileInput').onchange = (e) => {
     r.readAsDataURL(f);
 };
 
-// Socketイベント
 socket.on('chat_update', (data) => {
     document.getElementById('thinking-bubble')?.remove();
     document.querySelector('.brand-logo')?.classList.remove('is-thinking');
-
     addMessageToUI('assistant', data.response, null, data.voice_url);
-
-    if (data.voice_url) {
-        playVoice(data.voice_url);
-    }
+    if (data.voice_url) playVoice(data.voice_url);
 });
 
 socket.on('sys_status', (data) => {
@@ -353,18 +273,10 @@ socket.on('sys_status', (data) => {
 });
 
 window.switchTab = function(t, e) {
-    document.querySelectorAll('.panel').forEach(p => { 
-        p.style.display = 'none'; 
-        p.classList.remove('active-panel'); 
-    });
+    document.querySelectorAll('.panel').forEach(p => { p.style.display = 'none'; p.classList.remove('active-panel'); });
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-    
     const target = document.getElementById(t + '-panel');
-    if (target) { 
-        target.style.display = 'flex'; 
-        target.classList.add('active-panel'); 
-    }
-    
+    if (target) { target.style.display = 'flex'; target.classList.add('active-panel'); }
     if (e) e.currentTarget.classList.add('active');
     else {
         const navItems = document.querySelectorAll('.nav-item');
@@ -372,3 +284,9 @@ window.switchTab = function(t, e) {
         if (t === 'chat') navItems[1].classList.add('active');
     }
 };
+
+window.startScroll = function(offset) {
+    const chatBox = getChatElement();
+    if (chatBox) scrollInterval = setInterval(() => { chatBox.scrollTop += offset; }, 30);
+};
+window.stopScroll = function() { clearInterval(scrollInterval); };

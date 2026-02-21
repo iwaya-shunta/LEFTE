@@ -215,6 +215,18 @@ def get_news():
     except Exception as e:
         return jsonify({"news": [], "error": str(e)})
 
+# lefte_server.py に追加
+@app.route('/launch_app', methods=['POST'])
+def launch_app_api():
+    data = request.json
+    app_path = data.get('path')
+    try:
+        if os.path.exists(app_path):
+            os.startfile(os.path.normpath(app_path)) # 🚀 Windowsアプリを起動！
+            return jsonify({"success": True})
+        return jsonify({"success": False, "error": "パスが見つからないよ"})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
 # --- 🚀 起動処理 (SSL対応) ---
 
 if __name__ == '__main__':
