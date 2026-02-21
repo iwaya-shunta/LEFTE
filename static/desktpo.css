@@ -44,19 +44,18 @@ body {
     overflow: hidden;
 }
 
-/* 🚀 ニュースリンクの修正: 青色を排除し、白系で統一 */
-.news-link, .news-link:visited {
+/* static/desktpo.css に追加 */
+.news-link {
+    display: block;
     color: #bbb !important;
     text-decoration: none;
-    font-size: 14px;
-    display: block;
-    padding: 8px;
-    transition: 0.2s;
+    font-size: 13px;
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
+
 .news-link:hover {
     color: var(--accent) !important;
-    background: rgba(255, 255, 255, 0.05);
-    border-radius: 8px;
 }
 
 /* 🚀 カレンダーのダークモード化 */
@@ -238,6 +237,80 @@ iframe {
     min-width: 32px;
     flex-shrink: 0;
     filter: drop-shadow(0 0 5px var(--accent));
+}
+
+/* ジャンル選択のスタイル */
+/* PS風のジャンル選択 */
+.genre-bar {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 20px;
+    padding-bottom: 8px;
+    overflow-x: auto;
+}
+
+.genre-item {
+    cursor: pointer;
+    font-size: 11px;
+    color: #666;
+    transition: 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    white-space: nowrap;
+}
+
+.genre-item.active {
+    color: var(--accent);
+    transform: scale(1.1);
+    font-weight: bold;
+    text-shadow: 0 0 10px rgba(138, 180, 248, 0.5);
+}
+
+/* アイコンカードの進化 */
+.launcher-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(65px, 1fr));
+    gap: 15px;
+}
+
+.shortcut-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-decoration: none;
+    transition: 0.3s;
+}
+
+.icon-box {
+    width: 55px;
+    height: 55px;
+    background: #232425;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 26px;
+    transition: 0.3s;
+    position: relative;
+    overflow: hidden;
+}
+
+/* 🚀 PS風の「選択・ホバー」エフェクト */
+.shortcut-card:hover .icon-box {
+    border-color: var(--accent);
+    box-shadow: 0 0 20px rgba(138, 180, 248, 0.4);
+    transform: translateY(-5px) scale(1.05);
+}
+
+.shortcut-card:hover span {
+    color: var(--accent);
+    opacity: 1;
+}
+
+.shortcut-card span {
+    margin-top: 8px;
+    font-size: 9px;
+    color: #888;
+    transition: 0.2s;
 }
 
 @media (max-width: 768px) {

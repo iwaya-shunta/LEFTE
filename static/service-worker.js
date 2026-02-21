@@ -1,12 +1,13 @@
-const CACHE_NAME = 'lefte-cache-v5.5.1';
+const CACHE_NAME = 'lefte-cache-v5.5.3';
 const urlsToCache = [
   '/',
   '/manifest.json',
   '/desktpo.css',
   '/desktpo.js',
-  '/icon-192.png', // 🚀 追加：PWAのインストールに必須
-  '/icon-512.png', // 🚀 追加：スプラッシュ画面に必須
+  '/icon-192.png', // 🚀 必須：自分のアイコンをリストに入れる
+  '/icon-512.png', // 🚀 必須：自分のアイコンをリストに入れる
   'https://cdn.jsdelivr.net/npm/marked/marked.min.js'
+  // 🚀 外部の不安定な画像URLはここから削除する
 ];
 
 self.addEventListener('install', event => {

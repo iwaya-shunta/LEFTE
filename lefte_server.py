@@ -204,6 +204,17 @@ def background_monitor():
         except: pass
         socketio.sleep(5)
 
+# lefte_server.py に追加
+@app.route('/get_news', methods=['GET'])
+def get_news():
+    try:
+        # GoogleニュースのRSSを取得してJSONに変換してくれる無料サービスを利用
+        rss_url = "https://news.google.com/rss?hl=ja&gl=JP&ceid=JP:ja"
+        res = requests.get(f"https://api.rss2json.com/v1/api.json?rss_url={rss_url}")
+        return jsonify({"news": res.json().get('items', [])})
+    except Exception as e:
+        return jsonify({"news": [], "error": str(e)})
+
 # --- 🚀 起動処理 (SSL対応) ---
 
 if __name__ == '__main__':

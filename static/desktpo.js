@@ -150,6 +150,46 @@ if (!SpeechRecognition) {
     }
 }
 
+const myShortcuts = [
+    { name: "YouTube", url: "https://www.youtube.com", icon: "📺", category: "media" },
+    { name: "GitHub", url: "https://github.com", icon: "🐙", category: "work" },
+    { name: "Twitter", url: "https://twitter.com", icon: "🐦", category: "sns" },
+    { name: "Gmail", url: "https://mail.google.com", icon: "📧", category: "work" },
+    { name: "Netflix", url: "https://www.netflix.com", icon: "🎬", category: "media" }
+];
+
+function renderLauncher(category = 'all') {
+    const grid = document.getElementById('launcher-grid');
+    grid.innerHTML = ''; // 一旦クリア
+
+    const filtered = category === 'all' 
+        ? myShortcuts 
+        : myShortcuts.filter(s => s.category === category);
+
+    filtered.forEach(item => {
+        const card = document.createElement('a');
+        card.href = item.url;
+        card.target = "_blank";
+        card.className = "shortcut-card";
+        card.innerHTML = `
+            <div class="icon-circle">${item.icon}</div>
+            <span>${item.name}</span>
+        `;
+        grid.appendChild(card);
+    });
+}
+
+function filterShortcuts(category) {
+    // タブのactive状態を切り替え
+    document.querySelectorAll('.genre-item').forEach(el => {
+        el.classList.remove('active');
+        if(el.textContent.includes(category) || (category === 'all' && el.textContent === '全て')) {
+            el.classList.add('active');
+        }
+    });
+    renderLauncher(category);
+}
+
 // --- 🚀 履歴の読み込み ---
 async function loadHistory() {
     try {
@@ -167,6 +207,32 @@ async function loadHistory() {
         console.error("📜 履歴読み込みエラー:", e);
     }
 }
+
+// static/desktpo.js の updateWidgets 内のニュース取得部分を修正
+async function updateNews() {
+    const container = document.getElementById('news-container');
+    if (!container) return;
+
+    try {
+        const response = await fetch('/get_news');
+        const data = await response.json();
+        
+        if (data.news && data.news.length > 0) {
+            container.innerHTML = data.news.slice(0, 10).map(item => `
+                <div class="news-item">
+                    <a href="${item.link}" target="_blank" class="news-link">
+                        ${item.title}
+                    </a>
+                </div>`).join('');
+        } else {
+            container.innerHTML = '<p style="font-size:12px; opacity:0.5; padding:10px;">ニュースがありません</p>';
+        }
+    } catch (e) {
+        console.error("News load error:", e);
+    }
+}
+
+// 既存の updateWidgets から呼び出すか、DOMContentLoaded で実行するようにします
 
 // --- 🚀 送信処理 ---
 async function ask() {
@@ -228,6 +294,7 @@ window.stopScroll = function() {
 document.addEventListener('DOMContentLoaded', () => {
     loadHistory();
     updateWidgets();
+    renderLauncher('all');
 
     document.getElementById('sendBtn').onclick = ask;
     document.getElementById('fileBtn').onclick = () => document.getElementById('fileInput').click();
