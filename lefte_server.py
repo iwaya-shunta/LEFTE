@@ -226,12 +226,13 @@ def process_chat_task(data):
         voice_filename = f"v_{int(time.time())}.wav"
         generate_voice(full_text, filename=os.path.join(VOICE_DIR, voice_filename))
 
-        socketio.emit('chat_update', {
-            "user_message": user_input, 
-            "response": full_text, 
-            "voice_url": f"/wav_files/{voice_filename}",
-            "image_url": image_url
-        })
+        if voice_file:
+            socketio.emit('chat_update', {
+                "user_message": user_input, 
+                "response": full_text, 
+                "voice_url": f"/wav_files/{voice_file}", # 🚀 生成されたファイル名を使用
+                "image_url": image_url
+            })
 
     except Exception as e:
         logging.error(f"Chat error: {e}")
