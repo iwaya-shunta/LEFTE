@@ -1,4 +1,4 @@
-import os, re, requests, time, logging, base64
+import os, re, requests, time, logging, base64, hashlib
 from logging.handlers import RotatingFileHandler
 from datetime import datetime
 from flask import Flask, jsonify, request, send_from_directory, send_file
@@ -24,6 +24,11 @@ os.makedirs(VOICE_DIR, exist_ok=True)
 UPLOAD_FOLDER = os.path.join(HDD_BASE, 'uploads')
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
+# --- キャッシュ設定 ---
+CACHE_DIR = "voice_cache"
+# 頻繁に使う言葉をリストアップ（ここにあるものは優先的にキャッシュされる）
+COMMON_PHRASES = ["了解", "確認中だよ", "しゅんた", "はい", "ちょっと待ってね"]
+
 for d in [VOICE_DIR, UPLOAD_FOLDER]: os.makedirs(d, exist_ok=True)
 
 # --- ログ設定 ---
@@ -36,6 +41,7 @@ logging.getLogger().setLevel(logging.INFO)
 
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+USER_NAME = os.getenv("USER_NAME", "User")
 chat_storage.init_db()
 
 # --- ツール一覧 ---
@@ -51,13 +57,13 @@ tools = [
     hdd_actions.read_hdd_text_file
 ]
 
-FUNCTIONAL_RULES = """
+FUNCTIONAL_RULES = f"""
 1. カレンダー/ドライブ等は当然の日常として使い、説明は不要。
 2. 簡潔に回答せよ。
 3. アプリを起動する際は、ツールが返した '🚀LAUNCH_SIGNAL:...' を必ず含めること。
 4. ツール実行に失敗した場合は、技術的なエラーログを出すのではなく、ユーザーに「何ができなかったか」を1行で伝える。
 5. 音声合成（Voicevox）で読み上げるため、URLや複雑な記号、メタデータは本文に含めない。
-6. ユーザーを「しゅんた」と認識し、適度な距離感のアシスタントとして振る舞う。
+6. ユーザーを「{USER_NAME}」と認識し、適度な距離感のアシスタントとして振る舞う。
 """
 
 def get_system_instruction():
@@ -70,17 +76,53 @@ def get_system_instruction():
     return f"{personality}\n{FUNCTIONAL_RULES}"
 
 # --- 音声生成 (Voicevox) ---
-def generate_voice(text, speaker_id=8, filename="response.wav"):
+def generate_voice(text, speaker_id=8):
+    # 1. テキストからキャッシュ用のファイル名（ハッシュ）を作成
+    file_hash = hashlib.md5(text.encode()).hexdigest()
+    cache_path = os.path.join(CACHE_DIR, f"{file_hash}.wav")
+
+    # 2. 🚀 キャッシュがあれば即座に返す（VOICEVOXを叩かない）
+    if os.path.exists(cache_path):
+        print(f"🚀 キャッシュヒット！: {text}")
+        return cache_path
+
+    # 3. テキストの洗浄
     clean_text = re.sub(r'\(.*?\)|（.*?）', '', text)
-    if not clean_text.strip(): clean_text = "了解だよ。"
+    if not clean_text.strip(): 
+        clean_text = "了解だよ。"
+
+    print(f"🎤 新規音声生成中...: {clean_text}")
+
     try:
-        res = requests.post(f"{VOICEVOX_URL}/audio_query", params={'text': clean_text, 'speaker': speaker_id})
+        # 4. Audio Query の作成
+        res = requests.post(
+            f"{VOICEVOX_URL}/audio_query", 
+            params={'text': clean_text, 'speaker': speaker_id}
+        )
+        res.raise_for_status() # エラーがあれば例外を投げる
         data = res.json()
+
+        # パラメータ調整（しゅんたさん好みの設定）
         data.update({'speedScale': 1.15, 'intonationScale': 1.4})
-        res_syn = requests.post(f"{VOICEVOX_URL}/synthesis", params={'speaker': speaker_id}, json=data)
-        with open(filename, "wb") as f: f.write(res_syn.content)
+
+        # 5. 音声合成 (Synthesis)
+        res_syn = requests.post(
+            f"{VOICEVOX_URL}/synthesis", 
+            params={'speaker': speaker_id}, 
+            json=data
+        )
+        res_syn.raise_for_status()
+
+        # 6. 【重要】キャッシュ先に直接保存する
+        with open(cache_path, "wb") as f:
+            f.write(res_syn.content)
+        
+        return cache_path
+
     except Exception as e:
         logging.error(f"Voice generation error: {e}")
+        # エラー時は None を返すか、予備の音声を返すロジックを検討
+        return None
 
 # --- ルーティング ---
 @app.route('/')

@@ -3,6 +3,9 @@ const socket = io();
 // 状態管理
 let selectedFileBase64 = null, selectedMimeType = null, selectedFileObj = null;
 let scrollInterval;
+let currentAudio = null;
+let isLiveMode = false;
+let recognition = null;
 
 // IDの不整合対策
 const getChatElement = () => document.getElementById('chatBox') || document.getElementById('chat-history');
@@ -87,6 +90,9 @@ async function launchApp(path) {
     if (!result.success) alert("起動エラー: " + result.error);
 }
 
+// static/desktpo.js の renderLauncher 関数を修正
+
+// static/desktpo.js の renderLauncher を以下に差し替え
 function renderLauncher(category = 'all') {
     const grid = document.getElementById('launcher-grid');
     if (!grid) return;
@@ -96,14 +102,15 @@ function renderLauncher(category = 'all') {
     filtered.forEach(item => {
         const card = document.createElement('a');
         card.className = "shortcut-card";
+
         if (item.type === 'app') {
-            card.href = "#";
-            card.onclick = (e) => { e.preventDefault(); launchApp(item.url); };
+            // 🚀 サーバーを介さず、直接 Windows のプロトコルを呼び出すよ
+            card.href = `lefte-launch://${item.url}`;
         } else {
             card.href = item.url;
             card.target = "_blank";
         }
-        card.innerHTML = `<div class="icon-box">${item.icon}</div><span>${item.name}</span>`; // 🚀 icon-boxに統一
+        card.innerHTML = `<div class="icon-box">${item.icon}</div><span>${item.name}</span>`;
         grid.appendChild(card);
     });
 }
@@ -184,6 +191,12 @@ async function ask() {
         bubble.id = 'thinking-bubble';
     }
 
+    if (currentAudio) {
+        currentAudio.pause();
+        currentAudio.currentTime = 0;
+        currentAudio = null;
+    }
+
     const model = document.querySelector('input[name="modelSelect"]:checked').value;
     input.value = '';
 
@@ -227,6 +240,57 @@ if (SpeechRecognition) {
     if (micBtn) micBtn.onclick = () => recognition.start();
 }
 
+function initLiveMode() {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) return alert("お使いのブラウザは音声認識に対応していません。");
+
+    recognition = new SpeechRecognition();
+    recognition.lang = 'ja-JP';
+    recognition.continuous = true;
+    recognition.interimResults = false;
+
+    recognition.onresult = (event) => {
+        // 🚀 エコーガード：L.E.F.T.E.が喋っている最中なら無視する
+        if (currentAudio && !currentAudio.paused) {
+            console.log("AIが喋っているので無視しました");
+            return;
+        }
+
+        const lastIndex = event.results.length - 1;
+        const text = event.results[lastIndex][0].transcript;
+
+        if (event.results[lastIndex].isFinal && text.trim().length > 0) {
+            console.log("Live認識確定:", text);
+            const input = document.getElementById('geminiInput');
+            if (input) {
+                input.value = text;
+                ask(); // 既存の送信関数を呼び出し
+            }
+        }
+    };
+
+    recognition.onend = () => {
+        if (isLiveMode) recognition.start(); // 自動再起動
+    };
+}
+
+function toggleLiveMode() {
+    isLiveMode = !isLiveMode;
+    const btn = document.getElementById('liveModeBtn');
+    const span = btn.querySelector('span');
+
+    if (isLiveMode) {
+        if (!recognition) initLiveMode();
+        recognition.start();
+        btn.classList.add('active');
+        span.innerText = "Live Mode: ON";
+    } else {
+        recognition.stop();
+        btn.classList.remove('active');
+        span.innerText = "Live Mode: OFF";
+    }
+}
+
 // --- 🚀 初期化・イベント ---
 document.addEventListener('DOMContentLoaded', () => {
     loadHistory();
@@ -261,7 +325,23 @@ socket.on('chat_update', (data) => {
     document.getElementById('thinking-bubble')?.remove();
     document.querySelector('.brand-logo')?.classList.remove('is-thinking');
     addMessageToUI('assistant', data.response, null, data.voice_url);
-    if (data.voice_url) playVoice(data.voice_url);
+    if (data.voice_url) {
+        // もし既に再生中の音があれば止める（割り込みへの準備）
+        if (currentAudio) {
+            currentAudio.pause();
+            currentAudio.currentTime = 0;
+        }
+
+        currentAudio = new Audio(data.voice_url);
+        
+        // 再生開始
+        currentAudio.play().catch(e => {
+            console.warn("ブラウザの制限で自動再生がブロックされました。一度画面をクリックしてください。");
+        });
+
+        // 再生が終わったらリセット
+        currentAudio.onended = () => { currentAudio = null; };
+    }
 });
 
 socket.on('sys_status', (data) => {

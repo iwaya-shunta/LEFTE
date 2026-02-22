@@ -312,7 +312,18 @@ iframe {
     color: #888;
     transition: 0.2s;
 }
+#liveModeBtn.active {
+    background-color: #ff4b4b !important;
+    color: white;
+    box-shadow: 0 0 15px rgba(255, 75, 75, 0.6);
+    animation: pulse-red 2s infinite;
+}
 
+@keyframes pulse-red {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
 @media (max-width: 768px) {
     body {
         margin: 0 !important;
