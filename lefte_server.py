@@ -25,7 +25,7 @@ UPLOAD_FOLDER = os.path.join(HDD_BASE, 'uploads')
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # --- キャッシュ設定 ---
-CACHE_DIR = "voice_cache"
+CACHE_DIR = VOICE_DIR
 # 頻繁に使う言葉をリストアップ（ここにあるものは優先的にキャッシュされる）
 COMMON_PHRASES = ["了解", "確認中だよ", "しゅんた", "はい", "ちょっと待ってね"]
 
@@ -77,19 +77,19 @@ def get_system_instruction():
 
 # --- 音声生成 (Voicevox) ---
 def generate_voice(text, speaker_id=8):
-    # 1. テキストからキャッシュ用のファイル名（ハッシュ）を作成
-    file_hash = hashlib.md5(text.encode()).hexdigest()
-    cache_path = os.path.join(CACHE_DIR, f"{file_hash}.wav")
-
-    # 2. 🚀 キャッシュがあれば即座に返す（VOICEVOXを叩かない）
-    if os.path.exists(cache_path):
-        print(f"🚀 キャッシュヒット！: {text}")
-        return cache_path
-
-    # 3. テキストの洗浄
+    # 1. 先にテキストを洗浄する（キャッシュヒット率を上げるため）
     clean_text = re.sub(r'\(.*?\)|（.*?）', '', text)
     if not clean_text.strip(): 
         clean_text = "了解だよ。"
+
+    # 2. 洗浄後のテキストからキャッシュ用のハッシュを作成
+    file_hash = hashlib.md5(clean_text.encode()).hexdigest()
+    cache_path = os.path.join(CACHE_DIR, f"{file_hash}.wav")
+
+    # 3. 🚀 キャッシュがあれば即座に返す
+    if os.path.exists(cache_path):
+        logging.info(f"🚀 キャッシュヒット！: {clean_text[:15]}...")
+        return cache_path
 
     print(f"🎤 新規音声生成中...: {clean_text}")
 
@@ -99,10 +99,8 @@ def generate_voice(text, speaker_id=8):
             f"{VOICEVOX_URL}/audio_query", 
             params={'text': clean_text, 'speaker': speaker_id}
         )
-        res.raise_for_status() # エラーがあれば例外を投げる
+        res.raise_for_status()
         data = res.json()
-
-        # パラメータ調整（しゅんたさん好みの設定）
         data.update({'speedScale': 1.15, 'intonationScale': 1.4})
 
         # 5. 音声合成 (Synthesis)
@@ -113,7 +111,7 @@ def generate_voice(text, speaker_id=8):
         )
         res_syn.raise_for_status()
 
-        # 6. 【重要】キャッシュ先に直接保存する
+        # 6. 保存
         with open(cache_path, "wb") as f:
             f.write(res_syn.content)
         
@@ -121,7 +119,6 @@ def generate_voice(text, speaker_id=8):
 
     except Exception as e:
         logging.error(f"Voice generation error: {e}")
-        # エラー時は None を返すか、予備の音声を返すロジックを検討
         return None
 
 # --- ルーティング ---
@@ -223,14 +220,15 @@ def process_chat_task(data):
         chat_storage.save_message('assistant', full_text)
 
         # 5. 音声生成とUI更新
-        voice_filename = f"v_{int(time.time())}.wav"
-        generate_voice(full_text, filename=os.path.join(VOICE_DIR, voice_filename))
+        voice_file_path = generate_voice(full_text)
 
-        if voice_file:
+        # generate_voice が返したパスからファイル名だけを抽出
+        if voice_file_path:
+            voice_filename = os.path.basename(voice_file_path)
             socketio.emit('chat_update', {
                 "user_message": user_input, 
                 "response": full_text, 
-                "voice_url": f"/wav_files/{voice_file}", # 🚀 生成されたファイル名を使用
+                "voice_url": f"/wav_files/{voice_filename}", # 🚀 ここを修正
                 "image_url": image_url
             })
 
