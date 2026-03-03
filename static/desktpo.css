@@ -1,25 +1,26 @@
 /* --- 1. 基本設定 --- */
 :root {
-    --bg: #131314;
-    --card: #1e1f20;
-    --text: #e3e3e3;
+    --bg: #0e0e10;
+    --card: #1c1c1e;
     --accent: #8ab4f8;
-    --border: #444746;
+    --text: #e1e1e3;
+    --text-dim: #9aa0a6;
+    --border: #333;
+    --input-bg: #2a2a2c;
 }
 
 * { box-sizing: border-box; }
 
 body {
     margin: 0;
-    padding: 15px;
+    padding: 0;
     font-family: 'Hiragino Sans', 'Meiryo', sans-serif;
     background: var(--bg);
     color: var(--text);
     display: grid;
-    grid-template-columns: 1fr 1.2fr 1fr;
-    grid-template-rows: 80px 1fr;
-    gap: 15px;
-    height: 95vh;
+    grid-template-columns: 1fr 1.5fr 1fr;
+    grid-template-rows: 60px 1fr;
+    height: 100vh;
     width: 100vw;
     overflow: hidden;
 }
@@ -28,20 +29,17 @@ body {
 .panel {
     display: flex;
     flex-direction: column;
-    gap: 15px;
+    padding: 15px;
     height: 100%;
-    min-height: 0;
-    position: relative;
+    overflow: hidden;
 }
 
 .widget {
     background: var(--card);
-    border-radius: 24px;
-    padding: 20px;
+    border-radius: 20px;
     border: 1px solid var(--border);
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
+    padding: 20px;
+    margin-bottom: 15px;
 }
 
 /* static/desktpo.css に追加 */
@@ -74,10 +72,10 @@ iframe {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    padding: 0 20px;
     background: var(--card);
-    border-radius: 24px;
-    border: 1px solid var(--border);
-    padding: 0 30px;
+    border-bottom: 1px solid var(--border);
+    z-index: 100;
 }
 
 .model-selector {
@@ -117,7 +115,7 @@ iframe {
     padding: 10px;
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 15px;
 }
 
 /* 🚀 マイクボタンの反転を修正 */
@@ -196,15 +194,37 @@ iframe {
 
 /* 入力欄全体 */
 .input-wrapper {
-    background: #28292a;
+    background: var(--input-bg);
+    border-radius: 25px;
     padding: 8px 15px;
     display: flex;
     align-items: center;
-    border-radius: 20px;
-    gap: 12px;
+    gap: 10px;
+    margin: 0 10px 10px 10px;
+    border: 1px solid var(--border);
 }
 
-#geminiInput { flex: 1; background: transparent; border: none; color: white; outline: none; }
+#geminiInput {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: white;
+    outline: none;
+    font-size: 14px;
+}
+
+.input-wrapper button {
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    cursor: pointer;
+    font-size: 18px;
+    display: flex;
+    align-items: center;
+    transition: 0.2s;
+}
+
+.input-wrapper button:hover { color: var(--accent); }
 
 /* 🚀 スクロールボタンの固定 */
 .scroll-controls {
@@ -312,61 +332,114 @@ iframe {
     color: #888;
     transition: 0.2s;
 }
-#liveModeBtn.active {
-    background-color: #ff4b4b !important;
-    color: white;
-    box-shadow: 0 0 15px rgba(255, 75, 75, 0.6);
-    animation: pulse-red 2s infinite;
+
+#liveModeBtn {
+    background: rgba(255,255,255,0.05) !important;
+    border-radius: 15px !important;
+    padding: 5px 10px !important;
+    font-size: 10px !important;
+    white-space: nowrap;
 }
 
-@keyframes pulse-red {
-    0% { transform: scale(1); }
-    50% { transform: scale(1.05); }
-    100% { transform: scale(1); }
+#liveModeBtn.active {
+    background: #ff4b4b !important;
+    color: white !important;
 }
+
 @media (max-width: 768px) {
     body {
-        margin: 0 !important;
-        width: 100vw !important;
-        height: 100dvh !important; /* スマホは動的ビューポート全画面 */
-        display: flex !important;
-        flex-direction: column !important;
-        border-radius: 0;
-        padding-top: env(safe-area-inset-top);
+        display: flex;
+        flex-direction: column;
+        grid-template-columns: none;
+        grid-template-rows: none;
     }
 
-    .top-bar { grid-column: auto; height: 60px; border-radius: 0; padding: 0 15px; }
+    .top-bar {
+        height: 50px;
+        padding: 0 15px;
+    }
 
-    /* 🚀 修正：アクティブなパネルを確実に表示し、真っ黒を回避 */
+    /* モバイルでは不要な情報を隠す */
+    .brand span, #cpu-temp, #weather, #clock { font-size: 12px; }
+    .model-selector label { padding: 4px 8px; font-size: 10px; }
+
     .panel {
         display: none !important;
-        width: 100% !important;
-        height: calc(100% - 150px) !important; /* ナビを避ける計算 */
-        padding: 10px !important;
+        flex: 1;
+        padding: 10px;
     }
-    .panel.active-panel { display: flex !important; }
+    .panel.active-panel {
+        display: flex !important;
+    }
 
-    /* 🚀 修正：タスクバーを避けるフローティング・ナビ */
+    /* ボトムナビゲーションを「白いボタン」から「アプリ風」へ修正 */
     .bottom-nav {
         display: flex !important;
-        position: fixed;
-        bottom: 25px; /* 下から浮かせる */
-        left: 15px;
-        right: 15px;
-        width: calc(100% - 30px);
-        height: 65px;
+        height: 70px;
         background: var(--card);
-        border: 1px solid var(--border);
-        border-radius: 25px; /* カプセルデザイン */
+        border-top: 1px solid #333;
         justify-content: space-around;
         align-items: center;
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
-        z-index: 1000;
-        padding-bottom: 0;
+        padding-bottom: env(safe-area-inset-bottom);
     }
 
-    .nav-item { background: none; border: none; color: #888; display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 10px; }
-    .nav-item.active { color: var(--accent); }
-    
-    .scroll-controls { display: none !important; }
+    .nav-item {
+        background: transparent !important;
+        border: none !important;
+        color: var(--text-dim);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+        flex: 1;
+        box-shadow: none !important;
+    }
+
+    .nav-item.active {
+        color: var(--accent);
+    }
+
+    .nav-item span { font-size: 20px; }
+    .nav-item small { font-size: 10px; }
+
+    .input-wrapper {
+        padding: 5px 8px !important; /* 内側の余白を削る */
+        gap: 5px !important;       /* ボタン同士の間隔を狭くする */
+    }
+
+    /* 入力エリア本体 */
+    #geminiInput {
+        min-width: 0; /* 幅0を許容して、他のボタンを優先的に表示 */
+        flex: 1;      /* 余ったスペースをすべて使う */
+        font-size: 13px;
+    }
+
+    /* Live Modeボタンをもっと小さく */
+    #liveModeBtn {
+        padding: 4px 6px !important;
+        font-size: 9px !important;
+        min-width: 50px;
+        text-align: center;
+    }
+
+    /* 他のアイコンボタン（＋や🔊など）のサイズ調整 */
+    .input-wrapper button {
+        font-size: 16px !important;
+        padding: 2px !important;
+    }
+
+    /* 送信ボタン（➤）を強調 */
+    #sendBtn {
+        font-size: 20px !important;
+        color: var(--accent) !important;
+        margin-left: 2px;
+    }
+
+    .scroll-controls button {
+    display: none;
+    }
+
+    .model-selector label {
+    display: none;
+    }
 }

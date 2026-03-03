@@ -274,6 +274,7 @@ function initLiveMode() {
     };
 }
 
+// desktpo.js 内の toggleLiveMode 関数を探して書き換え
 function toggleLiveMode() {
     isLiveMode = !isLiveMode;
     const btn = document.getElementById('liveModeBtn');
@@ -283,11 +284,13 @@ function toggleLiveMode() {
         if (!recognition) initLiveMode();
         recognition.start();
         btn.classList.add('active');
-        span.innerText = "Live Mode: ON";
+        // テキストを短縮
+        span.innerText = "LM ON"; 
     } else {
         recognition.stop();
         btn.classList.remove('active');
-        span.innerText = "Live Mode: OFF";
+        // テキストを短縮
+        span.innerText = "LM OFF"; 
     }
 }
 
