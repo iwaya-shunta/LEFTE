@@ -126,14 +126,20 @@ function filterShortcuts(category) {
 }
 
 // --- 💬 チャット機能 (ここが抜けていました！) ---
-function addMessageToUI(role, text, imageData = null, voiceUrl = null) {
+function addMessageToUI(role, text, imageData = null, voiceUrl = null, timestamp = null) {
     const chatBox = getChatElement();
     if (!chatBox) return;
 
     const bubble = document.createElement('div');
     const displayRole = (role === 'assistant' || role === 'gemini') ? 'gemini' : 'user';
     bubble.className = `message ${displayRole} show`;
-    const timeStr = new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+    let timeStr;
+    if (timestamp) {
+        // DBの形式 "2026-03-06 03:30:00" から "03:30" を抽出
+        timeStr = timestamp.substring(11, 16);
+    } else {
+        timeStr = new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+    }
 
     let imageHtml = "";
     if (imageData) {
@@ -173,7 +179,10 @@ async function loadHistory() {
         const chatBox = getChatElement();
         if (chatBox) {
             chatBox.innerHTML = '';
-            historyData.forEach(msg => addMessageToUI(msg.role, msg.content, msg.image_url, msg.voice_url));
+            historyData.forEach(msg => {
+                // 🚀 引数の最後に msg.timestamp を追加
+                addMessageToUI(msg.role, msg.content, msg.image_url, msg.voice_url, msg.timestamp);
+            });
         }
     } catch (e) { console.error("📜 履歴読み込みエラー:", e); }
 }
@@ -275,6 +284,7 @@ function initLiveMode() {
 }
 
 // desktpo.js 内の toggleLiveMode 関数を探して書き換え
+// static/desktpo.js 内の toggleLiveMode を修正
 function toggleLiveMode() {
     isLiveMode = !isLiveMode;
     const btn = document.getElementById('liveModeBtn');
@@ -284,13 +294,11 @@ function toggleLiveMode() {
         if (!recognition) initLiveMode();
         recognition.start();
         btn.classList.add('active');
-        // テキストを短縮
-        span.innerText = "LM ON"; 
+        span.innerText = "LIVE"; // 短くスッキリさせる
     } else {
-        recognition.stop();
+        if (recognition) recognition.stop();
         btn.classList.remove('active');
-        // テキストを短縮
-        span.innerText = "LM OFF"; 
+        span.innerText = "LIVE"; // 常にLIVEで、色だけで状態を表す
     }
 }
 
@@ -352,6 +360,24 @@ socket.on('sys_status', (data) => {
     if (tempEl && data.cpu_temp) {
         tempEl.innerText = `${data.cpu_temp}°C`;
         tempEl.style.color = parseFloat(data.cpu_temp) > 65 ? "#ff4444" : "var(--accent)";
+    }
+});
+
+// static/desktpo.js のイベントリスナーが並んでいるところに追加
+socket.on('voice_ready', (data) => {
+    if (data.voice_url) {
+        console.log("🔊 音声が完成しました:", data.voice_url);
+        
+        // もし既に再生中の音があれば止める
+        if (currentAudio) {
+            currentAudio.pause();
+            currentAudio.currentTime = 0;
+        }
+
+        currentAudio = new Audio(data.voice_url);
+        currentAudio.play().catch(e => {
+            console.warn("ブラウザにより自動再生がブロックされました。画面をクリックしてください。");
+        });
     }
 });
 

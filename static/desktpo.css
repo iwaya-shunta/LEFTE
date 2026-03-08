@@ -1,4 +1,4 @@
-/* --- 1. 基本設定 --- */
+/* --- 1. 基本設定 & 変数 --- */
 :root {
     --bg: #0e0e10;
     --card: #1c1c1e;
@@ -7,6 +7,7 @@
     --text-dim: #9aa0a6;
     --border: #333;
     --input-bg: #2a2a2c;
+    --top-height: 60px;
 }
 
 * { box-sizing: border-box; }
@@ -19,19 +20,20 @@ body {
     color: var(--text);
     display: grid;
     grid-template-columns: 1fr 1.5fr 1fr;
-    grid-template-rows: 60px 1fr;
-    height: 100vh;
+    grid-template-rows: var(--top-height) 1fr;
+    height: 96vh; /* 画面にフィット */
     width: 100vw;
-    overflow: hidden;
+    overflow: hidden; /* 全体のスクロールを禁止 */
 }
 
-/* --- 2. パネル管理 --- */
+/* --- 2. 共通パネル & ウィジェット --- */
 .panel {
     display: flex;
     flex-direction: column;
     padding: 15px;
     height: 100%;
-    overflow: hidden;
+    overflow: hidden; /* パネル自体ははみ出さない */
+    gap: 15px;
 }
 
 .widget {
@@ -39,34 +41,14 @@ body {
     border-radius: 20px;
     border: 1px solid var(--border);
     padding: 20px;
-    margin-bottom: 15px;
+    display: flex;
+    flex-direction: column;
+    min-height: 0; /* 子要素のスクロールを許可する魔法のプロパティ */
 }
 
-/* static/desktpo.css に追加 */
-.news-link {
-    display: block;
-    color: #bbb !important;
-    text-decoration: none;
-    font-size: 13px;
-    padding: 8px 0;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-}
+.bottom-nav{display: none;}
 
-.news-link:hover {
-    color: var(--accent) !important;
-}
-
-/* 🚀 カレンダーのダークモード化 */
-iframe {
-    width: 100%;
-    height: 100%;
-    border: none;
-    border-radius: 18px;
-    filter: invert(90%) hue-rotate(180deg) brightness(0.8) contrast(1.2);
-}
-#weather-map { filter: none !important; }
-
-/* --- 3. トップバー & AI選択 (image_ca6595.png 対応) --- */
+/* --- 3. トップバー --- */
 .top-bar {
     grid-column: 1 / 4;
     display: flex;
@@ -78,6 +60,9 @@ iframe {
     z-index: 100;
 }
 
+.brand { display: flex; align-items: center; gap: 12px; }
+.brand-logo { width: 32px; height: 32px; filter: drop-shadow(0 0 5px var(--accent)); }
+
 .model-selector {
     display: flex;
     background: var(--bg);
@@ -86,9 +71,7 @@ iframe {
     padding: 3px;
     gap: 2px;
 }
-
-.model-selector input { display: none; } /* 🚀 ラジオボタンの丸を隠す */
-
+.model-selector input { display: none; }
 .model-selector label {
     padding: 6px 15px;
     border-radius: 12px;
@@ -97,83 +80,73 @@ iframe {
     font-weight: bold;
     color: #888;
     transition: 0.3s;
-    display: flex;
-    align-items: center;
-    gap: 6px;
 }
-
 .model-selector input:checked + label {
     background: var(--card);
     color: var(--accent);
     box-shadow: 0 2px 10px rgba(0,0,0,0.3);
 }
 
-/* --- 4. チャット & マイクボタン (image_ca689a.png 対応) --- */
-#chatBox {
-    flex: 1;
-    overflow-y: auto;
-    padding: 10px;
-    display: flex;
-    flex-direction: column;
+/* --- 4. 左パネル (Library & News) --- */
+.genre-bar { display: flex; gap: 12px; margin-bottom: 15px; overflow-x: auto; padding-bottom: 5px; }
+.genre-item { cursor: pointer; font-size: 11px; color: #666; white-space: nowrap; }
+.genre-item.active { color: var(--accent); font-weight: bold; }
+
+.launcher-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(65px, 1fr));
     gap: 15px;
 }
-
-/* 🚀 マイクボタンの反転を修正 */
-#micBtn {
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 6px;
-    color: var(--text);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: 0.2s;
-    width: 38px;
-    height: 38px;
+.shortcut-card { display: flex; flex-direction: column; align-items: center; text-decoration: none; }
+.icon-box {
+    width: 55px; height: 55px; background: #232425; border: 1px solid var(--border);
+    border-radius: 14px; display: flex; align-items: center; justify-content: center;
+    font-size: 26px; transition: 0.3s;
 }
+.shortcut-card:hover .icon-box { border-color: var(--accent); transform: translateY(-3px); }
+.shortcut-card span { margin-top: 5px; font-size: 9px; color: #888; }
 
-#micBtn:hover { background: rgba(255, 255, 255, 0.1); }
-
-#micBtn svg {
-    width: 20px;
-    height: 20px;
-    stroke: currentColor;
-}
-
-.recording #micBtn {
-    background: var(--accent);
-    color: var(--bg);
-    border-color: var(--accent);
-    box-shadow: 0 0 15px var(--accent);
-}
-
-/* 送信ボタンの青矢印 */
-#sendBtn {
-    color: var(--accent) !important;
-    transition: 0.2s;
-}
-#sendBtn:hover { transform: scale(1.1); }
-
-#chat-history {
+#news-container {
     flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+}
+.news-link {
+    display: block;
+    color: var(--text-dim) !important;
+    text-decoration: none;
+    font-size: 12.5px;
+    padding: 10px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+    line-height: 1.4;
+}
+.news-link:hover { color: var(--accent) !important; }
+
+/* --- 5. 中央パネル (チャット：入力欄固定) --- */
+#chat-panel .widget {
+    padding: 0; /* 内部で分割するため0に */
+    flex: 1;
+}
+
+#chatBox {
+    flex: 1; /* 余ったスペースをすべて使い、スクロール可能にする */
     overflow-y: auto;
     padding: 20px;
     display: flex;
     flex-direction: column;
-    gap: 16px;
-    /* スクロールバーのデザイン */
+    gap: 20px;
 }
-#chat-history::-webkit-scrollbar { width: 5px; }
-#chat-history::-webkit-scrollbar-thumb { background: #444; border-radius: 10px; }
+
+/* MarkdownのPタグ余白調整 */
+.res-txt p { margin: 0 0 10px 0; line-height: 1.6; }
+.res-txt p:last-child { margin-bottom: 0; }
 
 .message {
-    max-width: 85%;
-    padding: 12px 16px;
+    max-width: 75%;
+    padding: 12px 18px;
     border-radius: 18px;
-    font-size: 14px;
-    line-height: 1.6;
+    font-size: 14.5px;
     position: relative;
     opacity: 0;
     transform: translateY(10px);
@@ -181,18 +154,26 @@ iframe {
 }
 .message.show { opacity: 1; transform: translateY(0); }
 
-.gemini { background: #1a1a1b; border: 1px solid var(--border); align-self: flex-start; margin-left: 40px; }
-.user { background: #2b2a2a; align-self: flex-end; border-bottom-right-radius: 4px; }
+.gemini { background: #1a1a1b; border: 1px solid var(--border); align-self: flex-start; margin-left: 45px; border-bottom-left-radius: 4px; }
+.user { background: #2d2e30; align-self: flex-end; border-bottom-right-radius: 4px; }
 
 .ai-avatar {
-    position: absolute; left: -40px; top: 4px;
-    width: 32px; height: 32px; border-radius: 50%;
-    background: #1a1a1b; border: 1px solid var(--border);
+    position: absolute; left: -45px; top: 0;
+    width: 34px; height: 34px; border-radius: 8px;
+    background: var(--accent); color: var(--bg);
     display: flex; align-items: center; justify-content: center;
-    font-size: 12px; color: var(--accent);
+    font-size: 14px; font-weight: bold;
 }
 
-/* 入力欄全体 */
+.message-footer { display: flex; justify-content: flex-end; align-items: center; gap: 8px; margin-top: 5px; opacity: 0.5; font-size: 10px; }
+.voice-btn { background: none; border: none; color: var(--accent); cursor: pointer; font-size: 10px; padding: 0; }
+
+/* 入力エリア：常にウィジェットの最下部に固定 */
+.input-wrapper-container {
+    padding: 15px;
+    background: var(--card);
+    border-top: 1px solid var(--border);
+}
 .input-wrapper {
     background: var(--input-bg);
     border-radius: 25px;
@@ -200,246 +181,121 @@ iframe {
     display: flex;
     align-items: center;
     gap: 10px;
-    margin: 0 10px 10px 10px;
     border: 1px solid var(--border);
 }
+#geminiInput { flex: 1; background: transparent; border: none; color: white; outline: none; font-size: 14px; }
 
-#geminiInput {
-    flex: 1;
-    background: transparent;
-    border: none;
-    color: white;
-    outline: none;
-    font-size: 14px;
+/* --- 6. 右パネル (Calendar & Status) --- */
+iframe {
+    width: 100%; height: 100%; border: none; border-radius: 18px;
+    filter: invert(90%) hue-rotate(180deg) brightness(0.8) contrast(1.2);
 }
 
+/* --- 7. スクロールバー & その他 --- */
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-thumb { background: #444; border-radius: 10px; }
+
+.scroll-controls { position: absolute; right: 20px; bottom: 100px; display: flex; flex-direction: column; gap: 10px; z-index: 100; }
+.scroll-controls button { width: 40px; height: 40px; border-radius: 50%; background: var(--card); border: 1px solid var(--border); color: var(--accent); cursor: pointer; }
+
+/* --- 8. モバイル対応 --- */
+@media (max-width: 768px) {
+    body { display: flex; flex-direction: column; }
+    .top-bar { height: 50px; }
+    .panel { display: none; }
+    .panel.active-panel { display: flex; flex: 1; }
+    .bottom-nav {
+        display: flex; height: 70px; background: var(--card); border-top: 1px solid #333;
+        justify-content: space-around; align-items: center; padding-bottom: env(safe-area-inset-bottom);
+    }
+    .nav-item { display: flex; flex-direction: column; align-items: center; color: var(--text-dim); background: none; border: none; }
+    .nav-item.active { color: var(--accent); }
+    .model-selector, .scroll-controls { display: none; }
+}
+
+/* --- ライブモード & マイクボタンのブラッシュアップ --- */
+
+/* 共通のボタンベース */
 .input-wrapper button {
-    background: none;
+    background: transparent;
     border: none;
     color: var(--text-dim);
     cursor: pointer;
-    font-size: 18px;
-    display: flex;
-    align-items: center;
-    transition: 0.2s;
-}
-
-.input-wrapper button:hover { color: var(--accent); }
-
-/* 🚀 スクロールボタンの固定 */
-.scroll-controls {
-    position: absolute;
-    right: 20px;
-    bottom: 90px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    z-index: 100;
-}
-.scroll-controls button {
-    width: 40px; height: 40px; border-radius: 50%;
-    background: var(--card); border: 1px solid var(--border);
-    color: var(--accent); cursor: pointer; font-size: 18px;
-}
-
-/* --- 5. モバイル/PC 切り替え --- */
-.bottom-nav { display: none; }
-
-.brand {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
-
-.brand-logo {
-    width: 32px !important;  /* 🚀 サイズを厳密に固定 */
-    height: 32px !important;
-    min-width: 32px;
-    flex-shrink: 0;
-    filter: drop-shadow(0 0 5px var(--accent));
-}
-
-/* ジャンル選択のスタイル */
-/* PS風のジャンル選択 */
-.genre-bar {
-    display: flex;
-    gap: 12px;
-    margin-bottom: 20px;
-    padding-bottom: 8px;
-    overflow-x: auto;
-}
-
-.genre-item {
-    cursor: pointer;
-    font-size: 11px;
-    color: #666;
-    transition: 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-    white-space: nowrap;
-}
-
-.genre-item.active {
-    color: var(--accent);
-    transform: scale(1.1);
-    font-weight: bold;
-    text-shadow: 0 0 10px rgba(138, 180, 248, 0.5);
-}
-
-/* アイコンカードの進化 */
-.launcher-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(65px, 1fr));
-    gap: 15px;
-}
-
-.shortcut-card {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    text-decoration: none;
-    transition: 0.3s;
-}
-
-.icon-box {
-    width: 55px;
-    height: 55px;
-    background: #232425;
-    border: 1px solid var(--border);
-    border-radius: 14px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 26px;
-    transition: 0.3s;
-    position: relative;
-    overflow: hidden;
+    transition: all 0.3s ease;
 }
 
-/* 🚀 PS風の「選択・ホバー」エフェクト */
-.shortcut-card:hover .icon-box {
-    border-color: var(--accent);
-    box-shadow: 0 0 20px rgba(138, 180, 248, 0.4);
-    transform: translateY(-5px) scale(1.05);
-}
-
-.shortcut-card:hover span {
-    color: var(--accent);
-    opacity: 1;
-}
-
-.shortcut-card span {
-    margin-top: 8px;
-    font-size: 9px;
-    color: #888;
-    transition: 0.2s;
-}
-
+/* ライブモードボタン（トグル） */
 #liveModeBtn {
-    background: rgba(255,255,255,0.05) !important;
-    border-radius: 15px !important;
-    padding: 5px 10px !important;
-    font-size: 10px !important;
-    white-space: nowrap;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 5px 12px;
+    font-size: 10px;
+    font-weight: bold;
+    letter-spacing: 0.5px;
+    gap: 6px;
+    margin-right: 5px;
 }
 
+/* ライブモードがOFFの時のドット */
+#liveModeBtn::before {
+    content: "";
+    width: 6px;
+    height: 6px;
+    background: #555;
+    border-radius: 50%;
+    transition: 0.3s;
+}
+
+/* 🚀 ライブモードがON（active）の時のスタイル */
 #liveModeBtn.active {
-    background: #ff4b4b !important;
-    color: white !important;
+    background: rgba(138, 180, 248, 0.1);
+    border-color: var(--accent);
+    color: var(--accent);
+    box-shadow: 0 0 10px rgba(138, 180, 248, 0.2);
 }
 
-@media (max-width: 768px) {
-    body {
-        display: flex;
-        flex-direction: column;
-        grid-template-columns: none;
-        grid-template-rows: none;
-    }
+#liveModeBtn.active::before {
+    background: var(--accent);
+    box-shadow: 0 0 8px var(--accent);
+    animation: pulse 1.5s infinite;
+}
 
-    .top-bar {
-        height: 50px;
-        padding: 0 15px;
-    }
+/* マイクボタンの調整 */
+#micBtn {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border);
+    margin: 0 5px;
+}
 
-    /* モバイルでは不要な情報を隠す */
-    .brand span, #cpu-temp, #weather, #clock { font-size: 12px; }
-    .model-selector label { padding: 4px 8px; font-size: 10px; }
+#micBtn:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text);
+}
 
-    .panel {
-        display: none !important;
-        flex: 1;
-        padding: 10px;
-    }
-    .panel.active-panel {
-        display: flex !important;
-    }
+/* 🚀 録音中のスタイル */
+#micBtn.recording {
+    background: rgba(255, 75, 75, 0.15);
+    border-color: #ff4b4b;
+    color: #ff4b4b;
+    animation: pulse-red 1.5s infinite;
+}
 
-    /* ボトムナビゲーションを「白いボタン」から「アプリ風」へ修正 */
-    .bottom-nav {
-        display: flex !important;
-        height: 70px;
-        background: var(--card);
-        border-top: 1px solid #333;
-        justify-content: space-around;
-        align-items: center;
-        padding-bottom: env(safe-area-inset-bottom);
-    }
+/* アニメーション定義 */
+@keyframes pulse {
+    0% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.3); opacity: 0.7; }
+    100% { transform: scale(1); opacity: 1; }
+}
 
-    .nav-item {
-        background: transparent !important;
-        border: none !important;
-        color: var(--text-dim);
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 4px;
-        flex: 1;
-        box-shadow: none !important;
-    }
-
-    .nav-item.active {
-        color: var(--accent);
-    }
-
-    .nav-item span { font-size: 20px; }
-    .nav-item small { font-size: 10px; }
-
-    .input-wrapper {
-        padding: 5px 8px !important; /* 内側の余白を削る */
-        gap: 5px !important;       /* ボタン同士の間隔を狭くする */
-    }
-
-    /* 入力エリア本体 */
-    #geminiInput {
-        min-width: 0; /* 幅0を許容して、他のボタンを優先的に表示 */
-        flex: 1;      /* 余ったスペースをすべて使う */
-        font-size: 13px;
-    }
-
-    /* Live Modeボタンをもっと小さく */
-    #liveModeBtn {
-        padding: 4px 6px !important;
-        font-size: 9px !important;
-        min-width: 50px;
-        text-align: center;
-    }
-
-    /* 他のアイコンボタン（＋や🔊など）のサイズ調整 */
-    .input-wrapper button {
-        font-size: 16px !important;
-        padding: 2px !important;
-    }
-
-    /* 送信ボタン（➤）を強調 */
-    #sendBtn {
-        font-size: 20px !important;
-        color: var(--accent) !important;
-        margin-left: 2px;
-    }
-
-    .scroll-controls button {
-    display: none;
-    }
-
-    .model-selector label {
-    display: none;
-    }
+@keyframes pulse-red {
+    0% { box-shadow: 0 0 0 0 rgba(255, 75, 75, 0.4); }
+    70% { box-shadow: 0 0 0 10px rgba(255, 75, 75, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(255, 75, 75, 0); }
 }

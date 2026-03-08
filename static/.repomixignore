@@ -1,0 +1,22 @@
+# ユーザーが指定した除外対象
+static/uploads/
+static/wav_files/
+.env
+
+# 一般的に含めるべきではない重い・不要なフォルダ
+__pycache__/
+.venv/
+.idea/
+.git/
+voice_cache/
+
+# ログファイルやDBファイル（中身がバイナリや個人情報のため）
+*.db
+*.log
+lefte_debug.log
+log.txt
+error_log.txt
+
+# 証明書（セキュリティのため）
+*.crt
+*.key
