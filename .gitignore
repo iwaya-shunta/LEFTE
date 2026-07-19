@@ -13,6 +13,7 @@ __pycache__/
 # L.E.F.T.E. 固有のデータ
 wav_files/
 static/uploads/
+static/voices/
 *.db
 *.log
 

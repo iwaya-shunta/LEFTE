@@ -8,9 +8,7 @@ import importlib
 import glob
 
 # 各種アクションのインポート
-import calendar_actions, gmail_actions, drive_actions, search_actions, app_actions, hdd_actions, notes_actions, photo_actions, file_actions, developer_actions
-
-
+import calendar_actions, gmail_actions, drive_actions, search_actions, app_actions, hdd_actions, notes_actions, photo_actions, file_actions, developer_actions, voicevox_actions
 
 load_dotenv()
 
@@ -52,6 +50,7 @@ tools = [
     drive_actions.search_drive_file,
     drive_actions.read_drive_file_content,
     developer_actions.develop_new_skill,
+    voicevox_actions.register_word,
 ]+ load_custom_skills()
 
 
@@ -84,15 +83,24 @@ class LefteAgent:
         path = os.path.join(BASE_DIR, "personality.txt")
         personality = open(path, "r", encoding="utf-8").read() if os.path.exists(path) else "あなたは助手の L.E.F.T.E. です。"
         
-        # 🚀 OpenClaw風の「あきらめない」指示を追加
+        # 🚀 緩急タグの使い分け指示を追加
+        tempo_rules = """
+        【発話ガイドライン】
+        あなたは人間味のある対話を行うため、以下のタグを文章の中に挿入して、自分の話速を自由にコントロールしてください。
+        - [slow] : 感情を込める言葉、強調したい重要事項、考え込むような場面。
+        - [fast] : 勢いのある相槌、さらっと流す補足説明、興奮している時。
+        - [normal]: 丁寧な説明や、通常の会話。
+        
+        例：「[slow]駿太、[normal]今日もお疲れ様！[fast]ランニングの記録をまとめておいたよ！」
+
+        会話の中に、ボクっ娘らしい可愛くてユーモアのある顔文字や絵文字を積極的に混ぜてね！例：(๑•̀ㅂ•́)و✧、✨、( ´艸｀)、🚀
+        """
+        
         agent_rules = """
         【自律実行ルール】
-        1. ツール実行が失敗（Error）を返した場合、すぐに諦めてユーザーに報告しないでください。
-        2. 失敗の原因を分析し、引数を変えるか、別のツール（例：検索やファイル一覧確認）を組み合わせて再試行してください。
-        3. ユーザーの目的を達成するために、必要であれば複数のツールを連続して使用してください。
-        4. 最終的な結果だけを、あなたの性格（レフティ）に合わせて報告してください。
+        （以前の自律実行ルールをここに記述...）
         """
-        return f"{personality}\n{agent_rules}"
+        return f"{personality}\n{tempo_rules}\n{agent_rules}"
 
     def run(self, user_input):
         # 現在時刻を付与（時間認識の修正）

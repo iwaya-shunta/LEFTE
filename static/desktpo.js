@@ -133,9 +133,12 @@ function addMessageToUI(role, text, imageData = null, voiceUrl = null, timestamp
     const bubble = document.createElement('div');
     const displayRole = (role === 'assistant' || role === 'gemini') ? 'gemini' : 'user';
     bubble.className = `message ${displayRole} show`;
+
+    // 🚀 修正：表示用テキストから [slow], [fast], [normal] を消す
+    const displayText = text.replace(/\[(slow|fast|normal)\]/g, '');
+
     let timeStr;
     if (timestamp) {
-        // DBの形式 "2026-03-06 03:30:00" から "03:30" を抽出
         timeStr = timestamp.substring(11, 16);
     } else {
         timeStr = new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
@@ -151,14 +154,15 @@ function addMessageToUI(role, text, imageData = null, voiceUrl = null, timestamp
         bubble.innerHTML = `
             <div class="ai-avatar">L</div>
             <div class="message-content">
-                <div class="res-txt">${marked.parse(text)}</div>
-                <div class="message-footer" style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
-                    <span class="message-time" style="font-size:10px; opacity:0.5;">${timeStr}</span>
-                    ${voiceUrl ? `<button class="voice-btn" onclick="playVoice('${voiceUrl}')">🔊 Listen</button>` : ''}
+                <div class="res-txt">${marked.parse(displayText)}</div> <!-- 🚀 ここを displayText に変更 -->
+                <div class="message-footer" style="display:flex; justify-content:flex-end; align-items:center; gap:10px; margin-top:5px; opacity:0.6; font-size:10px;">
+                    <span>${timeStr}</span>
+                    ${voiceUrl ? `<span style="cursor:pointer; color:var(--accent);" onclick="playVoice('${voiceUrl}')">🔊 Listen</span>` : ''}
                 </div>
             </div>`;
     } else {
-        bubble.innerHTML = `${imageHtml}<div class="message-text">${text}</div><span class="message-time" style="align-self:flex-end; font-size:10px; opacity:0.5; margin-top:4px;">${timeStr}</span>`;
+        // ユーザー側のメッセージからも一応タグを消しておくと安心
+        bubble.innerHTML = `${imageHtml}<div class="message-text">${displayText}</div><span class="message-time" style="align-self:flex-end; font-size:10px; opacity:0.5; margin-top:4px;">${timeStr}</span>`;
     }
     
     chatBox.appendChild(bubble);
