@@ -27,4 +27,7 @@ credentials.json
 voicevox_core_runtime/
 open_jtalk_dic_utf_8-1.11/
 *.vvm
+*.dicvoicevox_core_runtime/
+open_jtalk_dic_utf_8-1.11/
+*.vvm
 *.dic
