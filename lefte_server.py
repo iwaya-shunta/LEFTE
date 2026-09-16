@@ -208,9 +208,19 @@ def handle_chat(data):
 def process_chat_task(data):
     user_input = data.get('message', '')
     image_url = data.get('image_url')
+    mime_type = data.get('mime_type') # 🚀 フロントから送られるMIMEタイプを取得
+    
     try:
         chat_storage.save_message('user', user_input, image_url)
-        result = lefte_agent.run(user_input)
+        
+        # 🚀 写真や動画がある場合は、そのパスを解析処理に渡す
+        if image_url:
+            # /uploads/... を実際のローカルパスに変換
+            local_path = os.path.join(BASE_DIR, 'static', image_url.lstrip('/'))
+            result = lefte_agent.run(user_input, media_path=local_path, mime_type=mime_type)
+        else:
+            result = lefte_agent.run(user_input)
+            
         full_text = result.output or "完了だよ。"
         chat_storage.save_message('assistant', full_text)
         socketio.emit('chat_update', {"user_message": user_input, "response": full_text, "voice_url": None, "image_url": image_url})
@@ -261,8 +271,41 @@ def launch_app_api():
 @app.route('/uploads/<filename>')
 def serve_upload(filename):
     # アップロードした画像などを表示するために必要です
-    UPLOAD_FOLDER = os.path.join(HDD_BASE, 'uploads')
+    UPLOAD_FOLDER = os.path.join(BASE_DIR, 'static', 'uploads')
     return send_from_directory(UPLOAD_FOLDER, filename)
+
+# 🚀 ここにアップロード処理を追加
+@app.route('/upload_to_hdd', methods=['POST'])
+def upload_to_hdd():
+    from werkzeug.utils import secure_filename
+    if 'file' not in request.files:
+        return jsonify({'success': False, 'error': 'No file part'})
+    
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'success': False, 'error': 'No selected file'})
+        
+    try:
+        # ご要望通り /static/uploads に保存する
+        UPLOAD_FOLDER = os.path.join(BASE_DIR, 'static', 'uploads')
+        os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+        
+        filename = secure_filename(file.filename)
+        # タイムスタンプをつけてファイル名かぶりを防ぐ
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_")
+        save_name = timestamp + filename
+        save_path = os.path.join(UPLOAD_FOLDER, save_name)
+        
+        file.save(save_path)
+        
+        return jsonify({
+            'success': True, 
+            'path': f"/uploads/{save_name}",
+            'mime_type': file.content_type
+        })
+    except Exception as e:
+        logging.error(f"Upload error: {e}")
+        return jsonify({'success': False, 'error': str(e)})
 
 if __name__ == '__main__':
     init_local_voice()

@@ -1,5 +1,6 @@
 # セキュリティ関連
 .env
+*.crt
 *.pem
 *.key
 certs/

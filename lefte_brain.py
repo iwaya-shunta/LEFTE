@@ -6,6 +6,7 @@ from datetime import datetime
 from dotenv import load_dotenv
 import importlib
 import glob
+import chat_storage
 
 # 各種アクションのインポート
 import calendar_actions, gmail_actions, drive_actions, search_actions, app_actions, hdd_actions, notes_actions, photo_actions, file_actions, developer_actions, voicevox_actions
@@ -66,6 +67,9 @@ class LefteAgent:
         # システム指示の取得
         self.instruction = self._get_system_instruction()
         
+        # 過去の履歴を読み込む (デフォルト30日)
+        self.history = self._load_recent_history()
+        
         # 🚀 OpenClaw化の核心: チャットセッションの作成
         # これにより、AIは「ツール実行 → 失敗 → 別の方法で再試行」というループを内部で回せます
         self.chat_session = self.client.chats.create(
@@ -75,8 +79,71 @@ class LefteAgent:
                 tools=tools,
                 # 自動関数呼び出しをON。AIが「もう一度別のツールを呼ぶべきだ」と判断したら自動実行されます
                 automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=False)
-            )
+            ),
+            history=self.history
         )
+
+    def _load_recent_history(self, days=30):
+        """データベースから過去30日分の履歴を読み込み、Geminiのhistory形式に変換する"""
+        history_data = chat_storage.get_history_by_days(days)
+        formatted_history = []
+        
+        # 履歴が多すぎるとトークン数制限に引っかかるか、処理に時間がかかる可能性があるので、
+        # 直近の1000件までに制限するなどの対策を入れておく
+        if len(history_data) > 1000:
+            history_data = history_data[-1000:]
+            
+        # Geminiのhistoryは user -> model -> user -> model の交互である必要があるため、
+        # 連続する同一ロールのメッセージは結合する
+        for row in history_data:
+            timestamp, role, content, image_url = row
+            # roleが'system'など予期しないものの場合はスキップするかuser扱いにする
+            gemini_role = "model" if role == "assistant" or role == "model" else "user"
+            
+            if not content:
+                continue
+                
+            text_part = f"[{timestamp}] {content}"
+            
+            if formatted_history and formatted_history[-1].role == gemini_role:
+                # 前のメッセージと同じロールの場合は、テキストを追加（改行して結合）
+                existing_text = formatted_history[-1].parts[0].text
+                formatted_history[-1].parts = [types.Part.from_text(text=f"{existing_text}\n{text_part}")]
+            else:
+                # 異なるロール（または初回）の場合は新規追加
+                formatted_history.append(
+                    types.Content(
+                        role=gemini_role,
+                        parts=[types.Part.from_text(text=text_part)]
+                    )
+                )
+                
+        # historyは最初のメッセージが "user" である必要がある
+        if formatted_history and formatted_history[0].role != "user":
+            formatted_history.pop(0)
+
+        # 念のため末尾がuserだった場合はGemini APIがエラーを吐く可能性があるので、
+        # 今回はhistoryとして渡すだけなので問題ないケースも多いが、
+        # 厳密な user->model->user->model を要求される。
+        # historyを渡すときは偶数件(最後の要素がmodel)である必要がある場合が多い。
+        if formatted_history and formatted_history[-1].role == "user":
+            formatted_history.pop() # ★末尾のユーザー発言を削って、Modelで終わるように（もしくは空になるように）変更
+
+        # --- ここから追加: 完全な交互チェックと強制修正 ---
+        validated_history = []
+        expected_role = "user"
+        for msg in formatted_history:
+            if msg.role == expected_role:
+                validated_history.append(msg)
+                expected_role = "model" if expected_role == "user" else "user"
+            else:
+                logging.warning(f"履歴の順序が不正です。期待されるロール: {expected_role}, 実際のロール: {msg.role}。結合済みですが無視します。")
+
+        if validated_history and validated_history[-1].role == "user":
+            validated_history.pop()
+
+        logging.info(f"📚 {days}日分の履歴（{len(validated_history)}件）を読み込みました。")
+        return validated_history
 
     def _get_system_instruction(self):
         BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -102,7 +169,7 @@ class LefteAgent:
         """
         return f"{personality}\n{tempo_rules}\n{agent_rules}"
 
-    def run(self, user_input):
+    def run(self, user_input, media_path=None, mime_type=None):
         # 現在時刻を付与（時間認識の修正）
         current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         full_prompt = f"【現在時刻: {current_time}】\n{user_input}"
@@ -110,8 +177,25 @@ class LefteAgent:
         logging.info(f"🤖 Agent (gemini-3) 思考開始: {user_input[:30]}...")
 
         try:
-            # 🚀 session.send_message を使うことで、これまでの文脈を維持した試行錯誤が可能
-            response = self.chat_session.send_message(full_prompt)
+            content_parts = [full_prompt]
+            
+            if media_path and os.path.exists(media_path):
+                logging.info(f"📂 メディアファイルを検知: {media_path}")
+                # 🚀 google-genai の仕様に合わせて、mime_type ではなく config の中で指定するか、単にパスを渡す
+                uploaded_file = self.client.files.upload(file=media_path)
+                
+                # 動画ファイルの処理中は完了を待つ
+                if uploaded_file.state.name == "PROCESSING":
+                    import time
+                    logging.info("⏳ 動画の処理完了を待機中...")
+                    while uploaded_file.state.name == "PROCESSING":
+                        time.sleep(2)
+                        uploaded_file = self.client.files.get(name=uploaded_file.name)
+                        
+                content_parts.insert(0, uploaded_file) # テキストの前にファイルを配置
+            
+            # session.send_message を使うことで、これまでの文脈を維持した試行錯誤が可能
+            response = self.chat_session.send_message(content_parts)
             
             # OpenClawの戻り値形式に合わせるためのラップクラス
             class Result:

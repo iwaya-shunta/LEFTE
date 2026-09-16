@@ -1,6 +1,6 @@
 import sqlite3
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_NAME = os.path.join(BASE_DIR, 'chat_history.db')
@@ -39,6 +39,28 @@ def save_message(role, content, image_url=None):
         conn.close()
     except Exception as e:
         print(f"❌ 保存エラー: {e}")
+
+def get_history_by_days(days=30):
+    """
+    指定された日数分の履歴を取得する
+    """
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        c = conn.cursor()
+        
+        # 指定日数前の日付を計算
+        target_date = datetime.now() - timedelta(days=days)
+        target_date_str = target_date.strftime('%Y-%m-%d %H:%M:%S')
+        
+        c.execute('''SELECT timestamp, role, content, image_url FROM messages
+                     WHERE timestamp >= ?
+                     ORDER BY id ASC''', (target_date_str,))
+        rows = c.fetchall()
+        conn.close()
+        return rows
+    except Exception as e:
+        print(f"❌ 履歴取得エラー: {e}")
+        return []
 
 def get_today_history():
     try:

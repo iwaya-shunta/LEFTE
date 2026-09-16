@@ -144,10 +144,18 @@ function addMessageToUI(role, text, imageData = null, voiceUrl = null, timestamp
         timeStr = new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
     }
 
-    let imageHtml = "";
+        let imageHtml = "";
     if (imageData) {
         const imgSrc = imageData.startsWith('data:') ? imageData : (imageData.startsWith('/') ? imageData : "/" + imageData);
-        imageHtml = `<img src="${imgSrc}" style="max-width: 100%; border-radius: 12px; margin-bottom: 8px; display: block;">`;
+        
+        // 動画かどうかを判定
+        const isVideo = imgSrc.toLowerCase().match(/\.(mp4|webm|ogg)$/) || (selectedMimeType && selectedMimeType.startsWith('video/'));
+        
+        if (isVideo) {
+            imageHtml = `<video src="${imgSrc}" controls style="max-width: 100%; max-height: 250px; border-radius: 12px; margin-bottom: 8px; display: block;"></video>`;
+        } else {
+            imageHtml = `<img src="${imgSrc}" style="max-width: 100%; max-height: 250px; object-fit: contain; border-radius: 12px; margin-bottom: 8px; display: block;">`;
+        }
     }
 
     if (displayRole === 'gemini') {
@@ -197,13 +205,7 @@ async function ask() {
     if (!text && !selectedFileBase64) return;
 
     document.querySelector('.brand-logo')?.classList.add('is-thinking');
-    addMessageToUI('user', text, selectedFileBase64);
     
-    if (!document.getElementById('thinking-bubble')) {
-        const bubble = addMessageToUI('assistant', "確認中だよ……");
-        bubble.id = 'thinking-bubble';
-    }
-
     if (currentAudio) {
         currentAudio.pause();
         currentAudio.currentTime = 0;
@@ -213,21 +215,33 @@ async function ask() {
     const model = document.querySelector('input[name="modelSelect"]:checked').value;
     input.value = '';
 
-    let imagePath = null;
-    if (selectedFileObj) {
-        const formData = new FormData();
-        formData.append('file', selectedFileObj);
-        try {
-            const res = await fetch('/upload_to_hdd', { method: 'POST', body: formData });
-            const data = await res.json();
-            if (data.success) imagePath = data.path;
-        } catch (err) { console.error("Upload failed", err); }
-    }
+        let imagePath = null;
+        let finalMimeType = selectedMimeType;
+        if (selectedFileObj) {
+            const formData = new FormData();
+            formData.append('file', selectedFileObj);
+            try {
+                const res = await fetch('/upload_to_hdd', { method: 'POST', body: formData });
+                const data = await res.json();
+                if (data.success) {
+                    imagePath = data.path;
+                    finalMimeType = data.mime_type || selectedMimeType;
+                }
+            } catch (err) { console.error("Upload failed", err); }
+        }
 
-    socket.emit('chat_request', { 
-        message: text, model: model, image: imagePath ? null : selectedFileBase64, 
-        image_url: imagePath, mime_type: selectedMimeType 
-    });
+        // 🚀 送信ボタンを押した瞬間にUIに追加する（ここではBase64か、アップロード成功後のパスを渡す）
+        addMessageToUI('user', text, imagePath || selectedFileBase64);
+    
+        if (!document.getElementById('thinking-bubble')) {
+            const bubble = addMessageToUI('assistant', "確認中だよ……");
+            bubble.id = 'thinking-bubble';
+        }
+
+        socket.emit('chat_request', { 
+            message: text, model: model, image: imagePath ? null : selectedFileBase64, 
+            image_url: imagePath, mime_type: finalMimeType 
+        });
 
     selectedFileBase64 = null; selectedFileObj = null;
     document.getElementById('preview-container').style.display = 'none';
@@ -325,12 +339,18 @@ document.getElementById('fileInput').onchange = (e) => {
     const f = e.target.files[0];
     if (!f) return;
     selectedFileObj = f;
+    selectedMimeType = f.type;
+    
     const r = new FileReader();
     r.onload = (ev) => {
         selectedFileBase64 = ev.target.result.split(',')[1];
-        selectedMimeType = f.type;
+        
         const preview = document.getElementById('preview-container');
-        preview.innerHTML = `<img src="${ev.target.result}" style="max-height:80px; border-radius:10px;">`;
+        if (selectedMimeType.startsWith('video/')) {
+            preview.innerHTML = `<video src="${ev.target.result}" style="max-height:80px; border-radius:10px;" autoplay muted loop></video>`;
+        } else {
+            preview.innerHTML = `<img src="${ev.target.result}" style="max-height:80px; border-radius:10px;">`;
+        }
         preview.style.display = 'block';
     };
     r.readAsDataURL(f);
