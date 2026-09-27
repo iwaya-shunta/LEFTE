@@ -42,6 +42,7 @@ tools = [
     gmail_actions.list_recent_emails,
     search_actions.search_web,
     app_actions.launch_app,
+    app_actions.search_nearby_places,
     hdd_actions.list_hdd_contents,
     notes_actions.save_note,
     notes_actions.read_note,
@@ -169,10 +170,20 @@ class LefteAgent:
         """
         return f"{personality}\n{tempo_rules}\n{agent_rules}"
 
-    def run(self, user_input, media_path=None, mime_type=None):
+    def run(self,user_input,media_path=None,mime_type=None,latitude=None,longitude=None,):
         # 現在時刻を付与（時間認識の修正）
-        current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        full_prompt = f"【現在時刻: {current_time}】\n{user_input}"
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        location_info = ""
+        if latitude is not None and longitude is not None:
+            location_context = (
+                f"\n【ユーザーの現在地】緯度: {latitude}, 経度: {longitude}\n"
+                "※周辺情報、店舗、ルート等について尋ねられた場合は、登録されている地図検索ツール（search_nearby_places 等）を自律的に使用してください。"
+            )
+
+        full_prompt = (
+            f"【現在時刻: {current_time}】{location_info}\n{user_input}"
+        )
         
         logging.info(f"🤖 Agent (gemini-3) 思考開始: {user_input[:30]}...")
 

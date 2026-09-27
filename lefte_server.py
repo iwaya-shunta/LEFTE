@@ -213,7 +213,7 @@ def process_chat_task(data):
     try:
         chat_storage.save_message('user', user_input, image_url)
         
-        # 🚀 写真や動画がある場合は、そのパスを解析処理に渡す
+                # 🚀 写真や動画がある場合は、そのパスを解析処理に渡す
         if image_url:
             # /uploads/... を実際のローカルパスに変換
             local_path = os.path.join(BASE_DIR, 'static', image_url.lstrip('/'))
@@ -222,14 +222,20 @@ def process_chat_task(data):
             result = lefte_agent.run(user_input)
             
         full_text = result.output or "完了だよ。"
-        chat_storage.save_message('assistant', full_text)
-        socketio.emit('chat_update', {"user_message": user_input, "response": full_text, "voice_url": None, "image_url": image_url})
+        
         def async_voice(text):
             path = generate_voice(text)
             if path:
                 fn = os.path.basename(path)
                 socketio.emit('voice_ready', {"voice_url": f"/wav_files/{fn}"})
-        socketio.start_background_task(async_voice, full_text)
+        
+        chat_storage.save_message('assistant', full_text)
+        
+        # 音声の事前生成＆URL取得
+        voice_path = generate_voice(full_text)
+        final_voice_url = f"/wav_files/{os.path.basename(voice_path)}" if voice_path else None
+        
+        socketio.emit('chat_update', {"user_message": user_input, "response": full_text, "voice_url": final_voice_url, "image_url": image_url})
     except Exception as e:
         logging.error(f"Chat error: {e}")
         socketio.emit('error_message', {"response": str(e)})
@@ -240,7 +246,27 @@ def index(): return send_file(os.path.join(BASE_DIR, 'desktpo.html'))
 @app.route('/history', methods=['GET'])
 def history_api():
     rows = chat_storage.get_today_history()
-    return jsonify([{"timestamp": r[0], "role": r[1], "content": r[2], "image_url": r[3]} for r in rows])
+    
+    result = []
+    for r in rows:
+        voice_url = None
+        # content (r[2]) のハッシュから voice_url を逆算できるならする
+        # このアプリでは text からの MD5 で .wav ファイル名を作っているため可能
+        if r[2]:
+            clean = re.sub(r'\(.*?\)|（.*?）|\[.*?\]|[^\w\s、。！？ーっ]', '', r[2])
+            file_hash = hashlib.md5(r[2].encode()).hexdigest()
+            # wavが存在すればURLをセット
+            if os.path.exists(os.path.join(VOICE_DIR, f"{file_hash}.wav")):
+                voice_url = f"/wav_files/{file_hash}.wav"
+        
+        result.append({
+            "timestamp": r[0], 
+            "role": r[1], 
+            "content": r[2], 
+            "image_url": r[3],
+            "voice_url": voice_url
+        })
+    return jsonify(result)
 
 @app.route('/wav_files/<filename>')
 def serve_wav(filename): return send_from_directory(VOICE_DIR, filename)
