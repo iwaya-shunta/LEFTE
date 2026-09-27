@@ -1,4 +1,4 @@
-import os, re, time, logging, base64, hashlib, asyncio, wave, io
+import os, re, time, logging, base64, hashlib, asyncio, wave, io, eventlet
 from pathlib import Path
 from logging.handlers import RotatingFileHandler
 from datetime import datetime
@@ -206,39 +206,59 @@ def handle_chat(data):
     socketio.start_background_task(process_chat_task, data)
 
 def process_chat_task(data):
-    user_input = data.get('message', '')
-    image_url = data.get('image_url')
-    mime_type = data.get('mime_type') # 🚀 フロントから送られるMIMEタイプを取得
-    
+    user_input = data.get("message", "")
+    image_url = data.get("image_url")
+    mime_type = data.get("mime_type")
+    lat = data.get("latitude")
+    lng = data.get("longitude")
+
+    # ログでサーバー側への着信を確認
+    logging.info(f"📍 受信座標: lat={lat}, lng={lng}")
+
     try:
-        chat_storage.save_message('user', user_input, image_url)
-        
-                # 🚀 写真や動画がある場合は、そのパスを解析処理に渡す
+        chat_storage.save_message("user", user_input, image_url)
+
+        # 🚀 修正: latitude と longitude を必ず渡す
         if image_url:
-            # /uploads/... を実際のローカルパスに変換
-            local_path = os.path.join(BASE_DIR, 'static', image_url.lstrip('/'))
-            result = lefte_agent.run(user_input, media_path=local_path, mime_type=mime_type)
+            local_path = os.path.join(BASE_DIR, "static", image_url.lstrip("/"))
+            result = lefte_agent.run(
+                user_input,
+                media_path=local_path,
+                mime_type=mime_type,
+                latitude=lat,
+                longitude=lng,
+            )
         else:
-            result = lefte_agent.run(user_input)
-            
+            result = lefte_agent.run(user_input, latitude=lat, longitude=lng)
+
         full_text = result.output or "完了だよ。"
-        
-        def async_voice(text):
-            path = generate_voice(text)
-            if path:
-                fn = os.path.basename(path)
-                socketio.emit('voice_ready', {"voice_url": f"/wav_files/{fn}"})
-        
-        chat_storage.save_message('assistant', full_text)
-        
-        # 音声の事前生成＆URL取得
+        chat_storage.save_message("assistant", full_text)
+
+        # 音声生成
         voice_path = generate_voice(full_text)
-        final_voice_url = f"/wav_files/{os.path.basename(voice_path)}" if voice_path else None
-        
-        socketio.emit('chat_update', {"user_message": user_input, "response": full_text, "voice_url": final_voice_url, "image_url": image_url})
+        final_voice_url = (
+            f"/wav_files/{os.path.basename(voice_path)}" if voice_path else None
+        )
+
+        socketio.emit(
+            "chat_update",
+            {
+                "user_message": user_input,
+                "response": full_text,
+                "voice_url": final_voice_url,
+                "image_url": image_url,
+            }
+        )
+
+        import eventlet
+
+        eventlet.sleep(0)
+
     except Exception as e:
         logging.error(f"Chat error: {e}")
-        socketio.emit('error_message', {"response": str(e)})
+        socketio.emit("error_message", {"response": str(e)})
+        eventlet.sleep(0)
+
 
 @app.route('/')
 def index(): return send_file(os.path.join(BASE_DIR, 'desktpo.html'))

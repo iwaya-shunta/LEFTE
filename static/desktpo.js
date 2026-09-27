@@ -215,38 +215,65 @@ async function ask() {
     const model = document.querySelector('input[name="modelSelect"]:checked').value;
     input.value = '';
 
-        let imagePath = null;
-        let finalMimeType = selectedMimeType;
-        if (selectedFileObj) {
-            const formData = new FormData();
-            formData.append('file', selectedFileObj);
-            try {
-                const res = await fetch('/upload_to_hdd', { method: 'POST', body: formData });
-                const data = await res.json();
-                if (data.success) {
-                    imagePath = data.path;
-                    finalMimeType = data.mime_type || selectedMimeType;
-                }
-            } catch (err) { console.error("Upload failed", err); }
-        }
+    let imagePath = null;
+    let finalMimeType = selectedMimeType;
+    if (selectedFileObj) {
+        const formData = new FormData();
+        formData.append('file', selectedFileObj);
+        try {
+            const res = await fetch('/upload_to_hdd', { method: 'POST', body: formData });
+            const data = await res.json();
+            if (data.success) {
+                imagePath = data.path;
+                finalMimeType = data.mime_type || selectedMimeType;
+            }
+        } catch (err) { console.error("Upload failed", err); }
+    }
 
-        // 🚀 送信ボタンを押した瞬間にUIに追加する（ここではBase64か、アップロード成功後のパスを渡す）
-        addMessageToUI('user', text, imagePath || selectedFileBase64);
-    
-        if (!document.getElementById('thinking-bubble')) {
-            const bubble = addMessageToUI('assistant', "確認中だよ……");
-            bubble.id = 'thinking-bubble';
-        }
+    // ユーザー発話をUIに追加
+    addMessageToUI('user', text, imagePath || selectedFileBase64);
 
-        socket.emit('chat_request', { 
-            message: text, model: model, image: imagePath ? null : selectedFileBase64, 
-            image_url: imagePath, mime_type: finalMimeType 
-        });
+    if (!document.getElementById('thinking-bubble')) {
+        const bubble = addMessageToUI('assistant', "確認中だよ……");
+        bubble.id = 'thinking-bubble';
+    }
+
+    // --- 🚀 ここから修正: 現在地座標の取得 ---
+    let coords = { latitude: null, longitude: null };
+    if (navigator.geolocation) {
+        try {
+            const pos = await new Promise((resolve, reject) => {
+                navigator.geolocation.getCurrentPosition(resolve, reject, {
+                    timeout: 5000,
+                    enableHighAccuracy: true,
+                    maximumAge: 60000 // 1分以内のキャッシュを許容して高速化
+                });
+            });
+            coords.latitude = pos.coords.latitude;
+            coords.longitude = pos.coords.longitude;
+            console.log("📍 位置情報取得成功:", coords);
+        } catch (e) {
+            console.warn("⚠️ 位置情報取得失敗または拒否:", e.code, e.message);
+        }
+    } else {
+        console.warn("⚠️ この環境は navigator.geolocation に対応していません。");
+    }
+
+    // サーバーへ送信
+    socket.emit('chat_request', { 
+        message: text, 
+        model: model, 
+        image: imagePath ? null : selectedFileBase64, 
+        image_url: imagePath, 
+        mime_type: finalMimeType,
+        latitude: coords.latitude,
+        longitude: coords.longitude
+    });
+    // --- 修正ここまで ---
 
     selectedFileBase64 = null; selectedFileObj = null;
     document.getElementById('preview-container').style.display = 'none';
 }
-
 // --- 🎤 音声認識 ---
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 if (SpeechRecognition) {

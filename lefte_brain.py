@@ -174,15 +174,15 @@ class LefteAgent:
         # 現在時刻を付与（時間認識の修正）
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-        location_info = ""
+        location_context = ""
         if latitude is not None and longitude is not None:
             location_context = (
                 f"\n【ユーザーの現在地】緯度: {latitude}, 経度: {longitude}\n"
-                "※周辺情報、店舗、ルート等について尋ねられた場合は、登録されている地図検索ツール（search_nearby_places 等）を自律的に使用してください。"
+                "※周辺情報、店舗、ルート等について尋ねられた場合は、登録されている地図検索ツール（search_nearby_places）を使用してください。"
             )
 
         full_prompt = (
-            f"【現在時刻: {current_time}】{location_info}\n{user_input}"
+            f"【現在時刻: {current_time}】{location_context}\n{user_input}"
         )
         
         logging.info(f"🤖 Agent (gemini-3) 思考開始: {user_input[:30]}...")
