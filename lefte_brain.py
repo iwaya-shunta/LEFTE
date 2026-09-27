@@ -61,8 +61,8 @@ class LefteAgent:
         api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
         self.client = genai.Client(api_key=api_key)
         
-        # 🚀 モデルを gemini-3-flash-preview に固定
-        self.model_id = "gemini-3-flash-preview"
+        # 🚀 モデルを gemini-3.8-flash に変更 (最新の高速・高精度モデル)
+        self.model_id = "gemini-3.8-flash"
         
         # システム指示の取得
         self.instruction = self._get_system_instruction()
