@@ -198,6 +198,25 @@ iframe {
     filter: invert(90%) hue-rotate(180deg) brightness(0.8) contrast(1.2);
 }
 
+.task-manager {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+    background: #1e1e1e;
+    color: #fff;
+    padding: 20px;
+    font-family: sans-serif;
+}
+.card {
+    background: #2d2d2d;
+    border: 1px solid #3f3f3f;
+    padding: 15px;
+    border-radius: 4px;
+}
+.card h3 { margin: 0 0 10px 0; font-size: 14px; color: #858585; }
+.value { font-size: 24px; font-weight: bold; }
+.sub-value { font-size: 12px; color: #aaa; margin-top: 5px; }
+
 /* --- 7. スクロールバー & その他 --- */
 ::-webkit-scrollbar { width: 5px; }
 ::-webkit-scrollbar-thumb { background: #444; border-radius: 10px; }

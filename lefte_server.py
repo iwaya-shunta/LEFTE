@@ -356,13 +356,17 @@ def upload_to_hdd():
 
 @app.route('/api/stats_history', methods=['GET'])
 def get_stats_history():
-    conn = sqlite3.connect('/home/iwaya/LEFTE/lefte.db')
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
-    cursor.execute("SELECT timestamp, cpu_percent, mem_percent, cpu_temp FROM system_stats ORDER BY id DESC LIMIT 50")
-    rows = [dict(row) for row in cursor.fetchall()]
-    conn.close()
-    return jsonify({"success": True, "data": rows[::-1]})
+    try:
+        conn = sqlite3.connect('/home/iwaya/LEFTE/lefte.db')
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("SELECT timestamp, cpu_percent, mem_percent, cpu_temp FROM system_stats ORDER BY id DESC LIMIT 50")
+        rows = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return jsonify({"success": True, "data": rows[::-1]})
+    except Exception as e:
+        logging.error(f"stats_history error: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
 
 if __name__ == '__main__':
     init_local_voice()

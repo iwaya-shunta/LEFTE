@@ -67,6 +67,33 @@ async function updateNews() {
     } catch (e) { console.error("News error:", e); }
 }
 
+async function updateStats() {
+    try {
+        const response = await fetch('/api/stats_history');
+        const json = await response.json();
+        if (json.success && json.data.length > 0) {
+            const latest = json.data[json.data.length - 1];
+            
+            document.getElementById('cpu-val').innerText = `${latest.cpu_percent.toFixed(1)}%`;
+            document.getElementById('mem-val').innerText = `${latest.mem_percent.toFixed(1)}%`;
+            
+            // ① ヘッダーの温度更新
+            const headerTemp = document.getElementById('cpu-temp');
+            if (headerTemp) headerTemp.innerText = `${latest.cpu_temp.toFixed(1)} °C`;
+
+            // ② 追加：ウィジェットの温度更新
+            const widgetTemp = document.getElementById('widget-cpu-temp');
+            if (widgetTemp) widgetTemp.innerText = `${latest.cpu_temp.toFixed(1)} °C`;
+        }
+    } catch (error) {
+        console.error('データ取得失敗:', error);
+    }
+}
+
+// 1秒ごとに更新
+setInterval(updateStats, 1000);
+updateStats();
+
 function updateWeatherAndMap(lat, lon) {
     fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true`)
         .then(r => r.json())
@@ -407,10 +434,17 @@ socket.on('chat_update', (data) => {
 });
 
 socket.on('sys_status', (data) => {
+    // 既存のヘッダー更新
     const tempEl = document.getElementById('cpu-temp');
     if (tempEl && data.cpu_temp) {
         tempEl.innerText = `${data.cpu_temp}°C`;
         tempEl.style.color = parseFloat(data.cpu_temp) > 65 ? "#ff4444" : "var(--accent)";
+    }
+    
+    // 🚀 追加: 左下ウィジェットの温度更新
+    const widgetTempEl = document.getElementById('widget-cpu-temp');
+    if (widgetTempEl && data.cpu_temp) {
+        widgetTempEl.innerText = `${data.cpu_temp}°C`;
     }
 });
 
