@@ -14,6 +14,8 @@ import voicevox_core
 import chat_storage, hdd_actions, calendar_actions, drive_actions, search_actions, gmail_actions, app_actions, notes_actions, photo_actions
 from lefte_brain import lefte_agent
 
+import sqlite3
+
 load_dotenv()
 app = Flask(__name__, static_url_path='', static_folder='static')
 CORS(app)
@@ -234,25 +236,24 @@ def process_chat_task(data):
         full_text = result.output or "完了だよ。"
         chat_storage.save_message("assistant", full_text)
 
-        # 音声生成
-        voice_path = generate_voice(full_text)
-        final_voice_url = (
-            f"/wav_files/{os.path.basename(voice_path)}" if voice_path else None
-        )
-
         socketio.emit(
             "chat_update",
             {
                 "user_message": user_input,
                 "response": full_text,
-                "voice_url": final_voice_url,
+                "voice_url": None,
                 "image_url": image_url,
             }
         )
 
         import eventlet
-
         eventlet.sleep(0)
+
+        voice_path = generate_voice(full_text)
+        if voice_path:
+            final_voice_url = f"/wav_files/{os.path.basename(voice_path)}"
+            socketio.emit("voice_ready", {"voice_url": final_voice_url})
+            eventlet.sleep(0)
 
     except Exception as e:
         logging.error(f"Chat error: {e}")
@@ -353,11 +354,27 @@ def upload_to_hdd():
         logging.error(f"Upload error: {e}")
         return jsonify({'success': False, 'error': str(e)})
 
+@app.route('/api/stats_history', methods=['GET'])
+def get_stats_history():
+    conn = sqlite3.connect('/home/iwaya/LEFTE/lefte.db')
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    cursor.execute("SELECT timestamp, cpu_percent, mem_percent, cpu_temp FROM system_stats ORDER BY id DESC LIMIT 50")
+    rows = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return jsonify({"success": True, "data": rows[::-1]})
+
 if __name__ == '__main__':
     init_local_voice()
     cert_file = os.getenv("CERT_FILE")
     key_file = os.getenv("KEY_FILE")
+    logging.info(f"🔍 証明書設定確認 - CERT_FILE: {cert_file}, KEY_FILE: {key_file}")
     if cert_file and key_file and os.path.exists(cert_file) and os.path.exists(key_file):
+        logging.info("🔒 HTTPSモードでサーバーを起動します。")
         socketio.run(app, host="0.0.0.0", port=5000, certfile=cert_file, keyfile=key_file)
     else:
+        if cert_file or key_file:
+            logging.warning("⚠️ 指定された証明書または鍵ファイルが見つからないため、HTTPモードにフォールバックします（原因: パス不正またはファイル不在）。")
+        else:
+            logging.info("🌐 HTTPS用の環境変数が未設定のため、HTTPモードでサーバーを起動します。")
         socketio.run(app, host="0.0.0.0", port=5000)

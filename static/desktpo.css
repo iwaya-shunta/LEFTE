@@ -139,11 +139,16 @@ body {
 }
 
 /* MarkdownのPタグ余白調整 */
-.res-txt p { margin: 0 0 10px 0; line-height: 1.6; }
+.res-txt p { margin: 0 0 10px 0; line-height: 1.6; overflow-wrap: break-word; word-break: break-word;}
 .res-txt p:last-child { margin-bottom: 0; }
-
+.res-txt pre, .res-txt code {
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-width: 100%;
+}
 .message {
     max-width: 75%;
+    min-width: 0;
     padding: 12px 18px;
     border-radius: 18px;
     font-size: 14.5px;
@@ -151,6 +156,8 @@ body {
     opacity: 0;
     transform: translateY(10px);
     transition: 0.3s ease-out;
+    overflow-wrap: break-word;
+    word-break: break-all;
 }
 .message.show { opacity: 1; transform: translateY(0); }
 

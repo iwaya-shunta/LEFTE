@@ -419,7 +419,6 @@ socket.on('voice_ready', (data) => {
     if (data.voice_url) {
         console.log("🔊 音声が完成しました:", data.voice_url);
         
-        // もし既に再生中の音があれば止める
         if (currentAudio) {
             currentAudio.pause();
             currentAudio.currentTime = 0;
